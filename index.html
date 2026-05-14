@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0d0d14"/>
+  <title>ELON CHICKEN RUN — $ECHICK</title>
+  <link rel="icon" href="assets/logo.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet"/>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="css/base.css"/>
+  <link rel="stylesheet" href="css/home.css"/>
+  <link rel="stylesheet" href="css/game.css"/>
+  <link rel="stylesheet" href="css/store.css"/>
+  <link rel="stylesheet" href="css/leaderboard.css"/>
+  <link rel="stylesheet" href="css/referrals.css"/>
+  <link rel="stylesheet" href="css/settings.css"/>
+  <link rel="stylesheet" href="css/admin.css"/>
+  <link rel="stylesheet" href="css/modals.css"/>
+</head>
+<body>
+
+<!-- ═══ SDK BOOT LOADER ═══ -->
+<div id="sdk-loader">
+  <div class="boot-center">
+    <div class="boot-logo">
+      <img src="assets/logo.png" alt="logo" class="boot-logo-img" onerror="this.style.display='none';document.querySelector('.boot-logo-emoji').style.display='block'"/>
+      <span class="boot-logo-emoji" style="display:none">🐓</span>
+    </div>
+    <div class="boot-spinner"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke-width="2.5"/></svg></div>
+    <p class="boot-text" id="boot-text">a believer is here</p>
+    <div class="boot-dots"><span></span><span></span><span></span></div>
+  </div>
+</div>
+
+<!-- ═══ CAPTCHA OVERLAY (first launch) ═══ -->
+<div id="captcha-overlay" class="captcha-overlay hidden">
+  <div class="captcha-card">
+    <div class="captcha-logo">🐓</div>
+    <h2 class="captcha-title">Prove You're Human</h2>
+    <p class="captcha-sub">Select all images that show a <strong>chicken</strong></p>
+    <div class="captcha-grid" id="captcha-grid"></div>
+    <p class="captcha-hint" id="captcha-hint"></p>
+    <button class="primary-btn" id="captcha-submit">Verify →</button>
+  </div>
+</div>
+
+<!-- ═══ APP ROOT ═══ -->
+<div id="app" class="app hidden">
+
+  <!-- ══ HOME SCREEN ══ -->
+  <div id="screen-home" class="screen active" data-screen="home">
+    <canvas id="bg-canvas" class="bg-canvas"></canvas>
+    <div class="home-bg-photo" id="home-bg-photo"></div>
+    <div class="home-wrap">
+      <!-- Top bar -->
+      <div class="home-topbar">
+        <div class="user-pill" id="home-user-pill">
+          <div class="user-pill-avatar" id="home-avatar">🐓</div>
+          <div class="user-pill-info">
+            <span class="user-pill-name" id="home-username">ChickenKing</span>
+            <div class="user-pill-xp"><div class="xp-fill" id="home-xp-fill" style="width:40%"></div></div>
+          </div>
+        </div>
+        <div class="home-top-right">
+          <div class="coin-chip" id="home-coins-chip"><img src="assets/logo.png" class="chip-logo" onerror="this.outerHTML='🪙'" /><span id="home-coin-count">0</span><span class="chip-plus">+</span></div>
+          <button class="icon-btn" id="home-settings-btn">⚙️</button>
+        </div>
+      </div>
+
+      <!-- Daily reward -->
+      <div class="home-rewards-row">
+        <div class="reward-chip" id="daily-reward-chip">
+          <span class="reward-icon">🎁</span>
+          <div class="reward-text">
+            <span class="reward-title">DAILY REWARD</span>
+            <span class="reward-timer" id="daily-timer">25:59:59</span>
+          </div>
+        </div>
+        <div class="reward-chip" id="free-eggs-chip">
+          <span class="reward-icon">🥚</span>
+          <div class="reward-text">
+            <span class="reward-title">FREE EGGS</span>
+            <span class="reward-timer">WATCH AD</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero chicken -->
+      <div class="home-hero-area">
+        <canvas id="hero-canvas" class="hero-canvas"></canvas>
+        <div class="hero-chicken" id="hero-chicken" data-taps="0">
+          <div class="chicken-sprite" id="chicken-sprite">🐓</div>
+          <div class="chicken-glow"></div>
+          <div class="chicken-shadow"></div>
+        </div>
+        <div class="hero-particles" id="hero-particles"></div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="home-stats-row">
+        <div class="stat-chip">
+          <span class="stat-label">TOP RUN</span>
+          <span class="stat-val" id="home-top-run">0 M</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-chip">
+          <span class="stat-label">TOTAL EGGS</span>
+          <span class="stat-val" id="home-total-eggs">0 <span style="font-size:.75em">🪙</span></span>
+        </div>
+      </div>
+
+      <!-- Title -->
+      <div class="home-title-block">
+        <h1 class="game-title">ELON<br/><span class="title-accent">CHICKEN</span><br/><span class="title-sub">RUN</span></h1>
+      </div>
+
+      <!-- Play button -->
+      <div class="home-play-area">
+        <button class="play-btn" id="btn-play">
+          <span class="play-btn-inner">PLAY <span class="play-arrow">▶</span></span>
+          <div class="play-shine"></div>
+        </button>
+      </div>
+
+      <!-- Referral gate overlay -->
+      <div id="referral-gate" class="referral-gate hidden">
+        <div class="gate-glass">
+          <div class="gate-icon">🔒</div>
+          <h3>Invite 5 Friends to Unlock!</h3>
+          <p>You need <strong>5 invites</strong> to start playing.</p>
+          <div class="ref-prog-wrap">
+            <div class="ref-prog-bar"><div class="ref-prog-fill" id="gate-fill" style="width:0%"></div></div>
+            <span id="gate-count-text">0 / 5</span>
+          </div>
+          <button class="primary-btn" id="gate-invite-btn">Invite Friends 🚀</button>
+          <button class="ghost-btn" id="gate-join-btn">Join Telegram Group</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ GAME SCREEN ══ -->
+  <div id="screen-game" class="screen" data-screen="game">
+    <canvas id="game-canvas" class="game-canvas"></canvas>
+    <!-- HUD -->
+    <div class="game-hud">
+      <div class="hud-block hud-block--left">
+        <div class="hud-label">DISTANCE</div>
+        <div class="hud-value" id="hud-distance">0 M</div>
+      </div>
+      <div class="hud-center-block">
+        <div class="coin-chip hud-coins"><span>🪙</span><span id="hud-coins">0</span></div>
+      </div>
+      <div class="hud-block hud-block--right">
+        <button class="icon-btn hud-pause-btn" id="btn-pause">⏸</button>
+      </div>
+    </div>
+    <div class="hud-score-row">
+      <div class="hud-block">
+        <div class="hud-label">SCORE</div>
+        <div class="hud-value" id="hud-score">0</div>
+      </div>
+      <div class="hud-combo hidden" id="hud-combo">
+        <span class="combo-label">COMBO</span>
+        <span class="combo-val" id="combo-val">x1</span>
+      </div>
+    </div>
+    <!-- Speed bar -->
+    <div class="speed-bar-wrap">
+      <span class="speed-label">SPEED</span>
+      <div class="speed-bar"><div class="speed-fill" id="speed-fill" style="width:20%"></div></div>
+      <span class="speed-arrow">»</span>
+    </div>
+    <!-- Powerup slots -->
+    <div class="powerup-row" id="powerup-row"></div>
+    <!-- Popups -->
+    <div class="game-popup" id="game-popup"></div>
+    <!-- Pause modal -->
+    <div id="pause-modal" class="overlay-modal hidden">
+      <div class="modal-glass">
+        <div class="modal-chicken">⏸️</div>
+        <h2>Paused</h2>
+        <button class="primary-btn" id="btn-resume">Resume</button>
+        <button class="ghost-btn" id="btn-quit">Quit to Home</button>
+      </div>
+    </div>
+    <!-- Game Over -->
+    <div id="gameover-modal" class="overlay-modal hidden">
+      <div class="modal-glass gameover-glass">
+        <div class="go-chicken-anim" id="go-chicken">💀🐓</div>
+        <h2 class="go-title">Busted!</h2>
+        <div class="go-stats">
+          <div class="go-stat"><span>Distance</span><strong id="go-dist">0 M</strong></div>
+          <div class="go-stat"><span>Score</span><strong id="go-score">0</strong></div>
+          <div class="go-stat"><span>Coins</span><strong id="go-coins">🪙 0</strong></div>
+          <div class="go-stat go-stat--best"><span>Best Run</span><strong id="go-best">0 M</strong></div>
+        </div>
+        <button class="primary-btn" id="btn-replay">Play Again 🚀</button>
+        <button class="ghost-btn" id="btn-go-home">Home</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ STORE SCREEN ══ -->
+  <div id="screen-store" class="screen" data-screen="store">
+    <div class="screen-topbar">
+      <h2 class="screen-heading">STORE</h2>
+      <div class="coin-chip"><span>🪙</span><span id="store-coins">0</span><span class="chip-plus">+</span></div>
+    </div>
+    <div class="store-tabs-row">
+      <button class="store-tab active" data-tab="characters">CHARACTERS</button>
+      <button class="store-tab" data-tab="eggs">EGGS</button>
+      <button class="store-tab" data-tab="special">SPECIAL</button>
+    </div>
+    <div id="store-body" class="store-body"></div>
+  </div>
+
+  <!-- ══ LEADERBOARD SCREEN ══ -->
+  <div id="screen-leaderboard" class="screen" data-screen="leaderboard">
+    <div class="screen-topbar">
+      <h2 class="screen-heading">LEADERBOARD</h2>
+      <div class="lb-reset-badge" id="lb-reset-badge">🔄 7d reset</div>
+    </div>
+    <div class="lb-scope-row">
+      <button class="scope-btn active" data-scope="global">GLOBAL</button>
+      <button class="scope-btn" data-scope="weekly">WEEKLY</button>
+      <button class="scope-btn" data-scope="alltime">ALL TIME</button>
+    </div>
+    <div class="lb-podium" id="lb-podium"></div>
+    <div class="lb-list" id="lb-list"></div>
+  </div>
+
+  <!-- ══ REFERRALS SCREEN ══ -->
+  <div id="screen-referrals" class="screen" data-screen="referrals">
+    <div class="screen-topbar">
+      <h2 class="screen-heading">REFERRALS</h2>
+    </div>
+    <div class="ref-body">
+      <div class="ref-hero-circle">
+        <span class="ref-big-num" id="ref-big-num">0</span>
+        <span class="ref-big-label">friends invited</span>
+      </div>
+      <p class="ref-unlock-note">Invite <strong>5 friends</strong> to unlock gameplay</p>
+      <div class="ref-prog-card">
+        <div class="ref-prog-bar"><div class="ref-prog-fill" id="ref-prog-fill" style="width:0%"></div></div>
+        <span id="ref-prog-text">0 / 5 required</span>
+      </div>
+      <div class="ref-link-card">
+        <span class="ref-link-label">YOUR REFERRAL LINK</span>
+        <div class="ref-link-row">
+          <span id="ref-link-val" class="ref-link-val">Loading…</span>
+          <button class="copy-btn" id="btn-copy-ref">Copy</button>
+        </div>
+      </div>
+      <!-- Reward milestones -->
+      <div class="ref-rewards-row">
+        <div class="ref-reward-chip">
+          <div class="rr-icon">🥚</div>
+          <div class="rr-val">5 INVITES</div>
+          <div class="rr-desc">Unlock Game</div>
+        </div>
+        <div class="ref-reward-chip">
+          <div class="rr-icon">👑</div>
+          <div class="rr-val">10 INVITES</div>
+          <div class="rr-desc">Rare Skin</div>
+        </div>
+        <div class="ref-reward-chip">
+          <div class="rr-icon">💰</div>
+          <div class="rr-val">20 INVITES</div>
+          <div class="rr-desc">2,500 Eggs</div>
+        </div>
+      </div>
+      <button class="primary-btn ref-share-btn" id="btn-share-ref">
+        <span>✈️ Invite Friends on Telegram</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ SETTINGS SCREEN ══ -->
+  <div id="screen-settings" class="screen" data-screen="settings">
+    <div class="screen-topbar">
+      <h2 class="screen-heading">SETTINGS</h2>
+    </div>
+    <div class="settings-body">
+      <!-- Token card -->
+      <div class="settings-token-card">
+        <div class="stc-left">
+          <img src="assets/logo.png" class="stc-logo" onerror="this.outerHTML='<span style=font-size:2rem>🐓</span>'"/>
+          <div>
+            <div class="stc-name">ELON CHICKEN ($ECHICK)</div>
+            <div class="stc-desc">The only chicken dat will reach the moon faster than Musk. Pure empower chaos and bling bling.</div>
+            <div class="stc-ca" id="stc-ca" title="Click to copy">Fv1pzrzpmk79Mb15xzRtBsnXSrQxFs4p66UmKNmBhWT</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">SOUND</div>
+      <div class="settings-row"><span>Music</span><div class="slider-wrap"><input type="range" id="music-vol" min="0" max="100" value="70" class="slider"/></div><span class="vol-icon">🔊</span></div>
+      <div class="settings-row"><span>SFX</span><div class="slider-wrap"><input type="range" id="sfx-vol" min="0" max="100" value="80" class="slider"/></div><span class="vol-icon">🔊</span></div>
+      <div class="settings-row">
+        <span class="sr-icon">🎵</span>
+        <div class="settings-item__info" style="flex:1"><span>Upload Music</span><span class="sr-val" style="font-size:.7rem">Your own MP3</span></div>
+        <label class="text-btn" for="music-upload" style="cursor:pointer">Upload</label>
+        <input type="file" id="music-upload" accept=".mp3,audio/*" style="display:none"/>
+      </div>
+
+      <div class="settings-section">GRAPHICS</div>
+      <div class="settings-row settings-row--seg">
+        <span>Quality</span>
+        <div class="seg-ctrl" id="quality-seg">
+          <button class="seg-btn" data-q="low">Low</button>
+          <button class="seg-btn" data-q="medium">Medium</button>
+          <button class="seg-btn active" data-q="high">High</button>
+          <button class="seg-btn" data-q="ultra">Ultra</button>
+        </div>
+      </div>
+      <div class="settings-row settings-row--toggle">
+        <span>Motion Blur</span>
+        <label class="ios-toggle"><input type="checkbox" id="toggle-blur" checked/><span class="ios-track"><span class="ios-thumb"></span></span></label>
+      </div>
+
+      <div class="settings-section">ACCOUNT</div>
+      <div class="settings-row">
+        <span class="sr-icon">✈️</span>
+        <span>Telegram</span>
+        <span class="sr-status connected" id="tg-connect-status">Connected ✓</span>
+      </div>
+      <div class="settings-row">
+        <span class="sr-icon">👤</span>
+        <span>User ID</span>
+        <span class="sr-val" id="tg-user-id">#0000000</span>
+      </div>
+      <div class="settings-row settings-row--wallet">
+        <span class="sr-icon">💼</span>
+        <span>Wallet (SOL)</span>
+        <button class="text-btn" id="btn-edit-wallet">Edit</button>
+      </div>
+      <div id="wallet-form" class="wallet-form hidden">
+        <input type="text" id="wallet-input" class="text-input" placeholder="Enter Solana wallet address…"/>
+        <button class="primary-btn wallet-save-btn" id="btn-save-wallet">Save Wallet</button>
+      </div>
+      <div class="settings-row">
+        <span class="sr-icon">🆔</span>
+        <span>Wallet Address</span>
+        <span class="sr-val" id="wallet-display">Not set</span>
+      </div>
+
+      <div class="settings-section">ABOUT</div>
+      <div class="settings-row"><span>Game Version</span><span class="sr-val">1.0.0</span></div>
+      <div class="settings-row settings-row--link" id="link-twitter"><span>𝕏 Twitter / X</span><span class="sr-arrow">›</span></div>
+      <div class="settings-row settings-row--link" id="link-community"><span>✈️ Community</span><span class="sr-arrow sr-val">@elon_chicken ›</span></div>
+    </div>
+  </div>
+
+  <!-- ══ BOTTOM NAV ══ -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <div class="nav-pill-indicator" id="nav-indicator"></div>
+    <button class="nav-btn active" data-nav="home"><span class="nav-ico">🏠</span><span class="nav-lbl">Play</span></button>
+    <button class="nav-btn" data-nav="store"><span class="nav-ico">🛒</span><span class="nav-lbl">Store</span></button>
+    <button class="nav-btn" data-nav="leaderboard"><span class="nav-ico">🏆</span><span class="nav-lbl">Leaderboard</span></button>
+    <button class="nav-btn" data-nav="referrals"><span class="nav-ico">👥</span><span class="nav-lbl">Referrals</span></button>
+    <button class="nav-btn" data-nav="settings"><span class="nav-ico">⚙️</span><span class="nav-lbl">Settings</span></button>
+  </nav>
+
+</div><!-- #app -->
+
+<!-- ═══ ADMIN MODAL (secret triple-tap) ═══ -->
+<div id="admin-modal" class="admin-modal hidden">
+  <div class="admin-overlay" id="admin-overlay"></div>
+  <div class="admin-sheet">
+    <div class="admin-drag-handle"></div>
+    <h2 class="admin-title">🔐 Admin Panel</h2>
+    <div id="admin-auth-form">
+      <input type="password" id="admin-pw-input" class="text-input" placeholder="Password…"/>
+      <button class="primary-btn" id="btn-admin-login">Enter</button>
+      <p class="admin-error hidden" id="admin-error">Wrong password</p>
+    </div>
+    <div id="admin-panel" class="hidden">
+      <div class="admin-tabs-row">
+        <button class="admin-tab active" data-atab="players">Players</button>
+        <button class="admin-tab" data-atab="logs">Logs</button>
+        <button class="admin-tab" data-atab="json">JSON</button>
+      </div>
+      <div id="admin-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- SCRIPTS -->
+<script src="js/config.js"></script>
+<script src="js/security.js"></script>
+<script src="js/db.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script src="js/home.js"></script>
+<script src="js/game.js"></script>
+<script src="js/store.js"></script>
+<script src="js/leaderboard.js"></script>
+<script src="js/referrals.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

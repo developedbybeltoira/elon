@@ -1,0 +1,201 @@
+/* ══════════════════════════════════════════════════
+   HOME.CSS — Home Screen
+   ══════════════════════════════════════════════════ */
+
+#screen-home{
+  background:var(--bg);
+  overflow:hidden;
+}
+/* Real photo background — drop bg_miami.png in assets/ */
+.bg-canvas{
+  position:absolute;inset:0;width:100%;height:100%;
+  pointer-events:none;z-index:0;
+}
+/* Photo overlay layer — covers entire home behind all content */
+.home-bg-photo{
+  position:absolute;inset:0;z-index:0;
+  background-image:url('../assets/bg_miami.png');
+  background-size:cover;
+  background-position:center 30%;
+  background-repeat:no-repeat;
+  /* Cinematic darkening so text/UI stays readable */
+  filter:saturate(1.15) brightness(0.72);
+}
+/* Gradient vignette over photo */
+.home-bg-photo::after{
+  content:'';
+  position:absolute;inset:0;
+  background:
+    linear-gradient(to bottom,
+      rgba(8,8,14,0.55) 0%,
+      rgba(8,8,14,0.1)  35%,
+      rgba(8,8,14,0.1)  55%,
+      rgba(8,8,14,0.75) 100%
+    );
+}
+
+.home-wrap{
+  position:relative;z-index:1;
+  height:100%;
+  display:flex;flex-direction:column;
+  padding:20px 16px 0;
+  gap:10px;
+  overflow:hidden;
+}
+
+/* ── Top bar ── */
+.home-topbar{display:flex;align-items:center;justify-content:space-between}
+.user-pill{
+  display:flex;align-items:center;gap:10px;
+  background:var(--glass-1);
+  border:1px solid var(--border-1);
+  border-radius:var(--r-pill);
+  padding:6px 14px 6px 6px;
+}
+.user-pill-avatar{
+  width:32px;height:32px;border-radius:50%;
+  background:var(--gold-dim);
+  border:2px solid var(--gold-border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;overflow:hidden;flex-shrink:0;
+}
+.user-pill-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.user-pill-info{display:flex;flex-direction:column;gap:4px}
+.user-pill-name{font-family:var(--f-display);font-size:0.82rem;font-weight:700;line-height:1}
+.user-pill-xp{
+  width:64px;height:4px;background:var(--glass-2);
+  border-radius:var(--r-pill);overflow:hidden;
+}
+.xp-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--orange));border-radius:var(--r-pill);transition:width 1s var(--spring)}
+.home-top-right{display:flex;align-items:center;gap:8px}
+
+/* ── Rewards row ── */
+.home-rewards-row{display:flex;gap:8px}
+.reward-chip{
+  flex:1;
+  display:flex;align-items:center;gap:8px;
+  background:var(--glass-1);border:1px solid var(--border-1);
+  border-radius:var(--r-md);padding:10px 12px;
+  cursor:pointer;
+  transition:transform 0.2s var(--spring),background 0.2s;
+}
+.reward-chip:active{transform:scale(0.96);background:var(--glass-2)}
+.reward-icon{font-size:1.4rem}
+.reward-text{display:flex;flex-direction:column;gap:1px}
+.reward-title{font-family:var(--f-display);font-size:0.62rem;font-weight:700;letter-spacing:0.08em;color:var(--txt-2)}
+.reward-timer{font-family:var(--f-display);font-size:0.78rem;font-weight:700;color:var(--gold)}
+
+/* ── Hero Area ── */
+.home-hero-area{
+  flex:1;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  min-height:160px;
+}
+.hero-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.hero-chicken{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;z-index:2;
+}
+.chicken-sprite{
+  font-size:6rem;line-height:1;
+  filter:drop-shadow(0 16px 32px rgba(245,200,66,0.35)) drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+  animation:heroFloat 3s ease-in-out infinite,heroRock 6s ease-in-out infinite;
+  transform-origin:bottom center;
+  transition:transform 0.1s;
+}
+.hero-chicken:active .chicken-sprite{transform:scale(0.9) rotate(-10deg)}
+@keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@keyframes heroRock{0%,100%{filter:drop-shadow(0 16px 32px rgba(245,200,66,0.35))}50%{filter:drop-shadow(0 20px 40px rgba(245,200,66,0.55))}}
+.chicken-glow{
+  position:absolute;inset:-30px;
+  background:radial-gradient(circle,rgba(245,200,66,0.16) 0%,transparent 65%);
+  border-radius:50%;animation:glowBreath 3s ease-in-out infinite;pointer-events:none;
+}
+@keyframes glowBreath{0%,100%{transform:scale(1);opacity:0.6}50%{transform:scale(1.2);opacity:1}}
+.chicken-shadow{
+  position:absolute;bottom:-22px;
+  width:70px;height:14px;
+  background:rgba(0,0,0,0.4);border-radius:50%;filter:blur(6px);
+  animation:shadowBreath 3s ease-in-out infinite;pointer-events:none;
+}
+@keyframes shadowBreath{0%,100%{transform:scaleX(1);opacity:0.4}50%{transform:scaleX(0.72);opacity:0.2}}
+.hero-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.hpart{
+  position:absolute;width:4px;height:4px;border-radius:50%;background:var(--gold);
+  animation:hpartFly linear infinite;opacity:0;
+}
+@keyframes hpartFly{
+  0%{opacity:0;transform:translateY(0) scale(0)}
+  15%{opacity:0.8;transform:scale(1)}
+  90%{opacity:0.2}
+  100%{opacity:0;transform:translateY(-100px) translateX(var(--dx,0px)) scale(0.4)}
+}
+
+/* ── Stats Row ── */
+.home-stats-row{
+  display:flex;align-items:center;
+  background:var(--glass-1);border:1px solid var(--border-1);
+  border-radius:var(--r-lg);padding:12px 20px;gap:12px;
+}
+.stat-chip{flex:1;display:flex;flex-direction:column;gap:2px;align-items:center}
+.stat-label{font-size:0.62rem;font-weight:700;letter-spacing:0.08em;color:var(--txt-3);text-transform:uppercase}
+.stat-val{font-family:var(--f-display);font-size:1rem;font-weight:700;color:var(--txt)}
+.stat-divider{width:1px;height:32px;background:var(--border-1)}
+
+/* ── Title ── */
+.home-title-block{text-align:center}
+.game-title{
+  font-family:var(--f-display);
+  font-size:clamp(2rem,9vw,2.8rem);
+  font-weight:800;line-height:0.9;
+  letter-spacing:-0.03em;text-transform:uppercase;
+  text-shadow:0 4px 20px rgba(245,200,66,0.3);
+}
+.title-accent{color:var(--gold)}
+.title-sub{font-size:0.55em;letter-spacing:0.15em;color:var(--txt-2);font-weight:600}
+
+/* ── Play Button ── */
+.home-play-area{display:flex;justify-content:center;padding:10px 0 16px}
+.play-btn{
+  position:relative;
+  width:calc(100% - 24px);max-width:300px;height:60px;
+  border-radius:var(--r-pill);
+  background:linear-gradient(135deg,#f5c842 0%,#ff8c42 100%);
+  color:#09090f;
+  font-family:var(--f-display);font-size:1.1rem;font-weight:800;letter-spacing:0.08em;
+  box-shadow:0 6px 28px rgba(245,200,66,0.38),0 2px 8px rgba(0,0,0,0.4);
+  overflow:hidden;
+  transition:transform 0.2s var(--spring),box-shadow 0.2s;
+}
+.play-btn:active{transform:scale(0.94);box-shadow:0 2px 12px rgba(245,200,66,0.2)}
+.play-btn-inner{position:relative;z-index:1;display:flex;align-items:center;gap:12px}
+.play-arrow{font-size:1rem;transition:transform 0.3s var(--spring)}
+.play-btn:hover .play-arrow{transform:translateX(4px)}
+.play-shine{
+  position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.22) 50%,transparent 60%);
+  animation:shineSweep 2.5s ease-in-out infinite;
+}
+@keyframes shineSweep{0%{transform:translateX(-100%)}60%,100%{transform:translateX(160%)}}
+
+/* ── Referral Gate ── */
+.referral-gate{
+  position:absolute;inset:0;z-index:40;
+  background:rgba(8,8,14,0.92);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.gate-glass{
+  width:100%;max-width:360px;
+  background:var(--glass-1);
+  border:1px solid var(--border-2);
+  border-radius:var(--r-xl);
+  padding:32px 24px 24px;
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+  text-align:center;
+  box-shadow:var(--sh-card);
+}
+.gate-icon{font-size:3rem}
+.gate-glass h3{font-family:var(--f-display);font-size:1.2rem;font-weight:800}
+.gate-glass p{color:var(--txt-2);font-size:0.88rem;line-height:1.5}
+.ref-prog-wrap{width:100%;display:flex;flex-direction:column;gap:6px;align-items:center}

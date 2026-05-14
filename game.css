@@ -1,0 +1,150 @@
+/* ══════════════════════════════════════════════════
+   GAME.CSS — Gameplay Canvas · HUD · Overlays
+   ══════════════════════════════════════════════════ */
+
+#screen-game{background:#000;overflow:hidden}
+.game-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* ─── HUD Top ─── */
+.game-hud{
+  position:absolute;top:0;left:0;right:0;
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:14px 14px 0;
+  pointer-events:none;z-index:10;
+}
+.game-hud .icon-btn{pointer-events:all}
+.hud-block{
+  background:rgba(13,13,20,0.72);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:var(--r-md);padding:8px 14px;
+  min-width:90px;
+}
+.hud-block--left{min-width:100px}
+.hud-block--right{background:none;border:none;backdrop-filter:none;min-width:unset;padding:0}
+.hud-label{font-size:0.58rem;font-weight:700;letter-spacing:0.1em;color:var(--txt-3);text-transform:uppercase;margin-bottom:2px}
+.hud-value{font-family:var(--f-display);font-size:1.1rem;font-weight:800;color:var(--txt)}
+.hud-center-block{display:flex;align-items:flex-start;justify-content:center}
+.hud-coins{pointer-events:none}
+
+/* ─── HUD Score row ─── */
+.hud-score-row{
+  position:absolute;top:80px;left:14px;
+  display:flex;align-items:center;gap:10px;
+  pointer-events:none;z-index:10;
+}
+.hud-combo{
+  background:rgba(245,200,66,0.18);
+  border:1px solid var(--gold-border);
+  border-radius:var(--r-sm);padding:6px 12px;
+  animation:comboPop 0.3s var(--spring);
+}
+@keyframes comboPop{from{transform:scale(0.7)}to{transform:scale(1)}}
+.combo-label{font-size:0.6rem;font-weight:700;letter-spacing:0.1em;color:var(--txt-3);display:block}
+.combo-val{font-family:var(--f-display);font-size:1.2rem;font-weight:800;color:var(--gold)}
+
+/* ─── Speed Bar ─── */
+.speed-bar-wrap{
+  position:absolute;bottom:16px;left:14px;right:14px;
+  display:flex;align-items:center;gap:10px;
+  pointer-events:none;z-index:10;
+}
+.speed-label{font-size:0.6rem;font-weight:700;letter-spacing:0.1em;color:var(--txt-2);flex-shrink:0}
+.speed-bar{
+  flex:1;height:5px;
+  background:rgba(255,255,255,0.1);border-radius:var(--r-pill);overflow:hidden;
+}
+.speed-fill{
+  height:100%;
+  background:linear-gradient(90deg,var(--gold),var(--orange));
+  border-radius:var(--r-pill);transition:width 0.4s var(--smooth);
+}
+.speed-arrow{color:var(--gold);font-size:0.9rem;flex-shrink:0}
+
+/* ─── Powerup Row ─── */
+.powerup-row{
+  position:absolute;top:140px;right:14px;
+  display:flex;flex-direction:column;gap:8px;
+  pointer-events:none;z-index:10;
+}
+.powerup-slot{
+  width:44px;height:44px;border-radius:var(--r-sm);
+  background:rgba(13,13,20,0.8);
+  border:1px solid rgba(255,255,255,0.15);
+  backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;position:relative;
+  animation:puSlotIn 0.4s var(--spring);
+}
+@keyframes puSlotIn{from{transform:scale(0) rotate(20deg)}to{transform:none}}
+.powerup-slot-timer{
+  position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:var(--gold);border-radius:var(--r-pill);
+  transform-origin:left;animation:puTimer linear forwards;
+}
+
+/* ─── Game Popup ─── */
+.game-popup{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;z-index:20;
+}
+.popup-msg{
+  font-family:var(--f-display);font-size:1.6rem;font-weight:800;
+  color:var(--gold);text-shadow:0 0 20px rgba(245,200,66,0.6);
+  animation:popupAnim 1.2s var(--smooth) forwards;
+  white-space:nowrap;
+}
+@keyframes popupAnim{
+  0%{opacity:0;transform:scale(0.5) translateY(20px)}
+  20%{opacity:1;transform:scale(1.1) translateY(0)}
+  40%{transform:scale(1)}
+  70%{opacity:1}
+  100%{opacity:0;transform:translateY(-40px) scale(0.9)}
+}
+
+/* ─── Overlay Modals (Pause / Game Over) ─── */
+.overlay-modal{
+  position:absolute;inset:0;z-index:50;
+  background:rgba(8,8,14,0.88);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  animation:overlayFadeIn 0.3s var(--smooth);
+}
+@keyframes overlayFadeIn{from{opacity:0}to{opacity:1}}
+.modal-glass{
+  width:100%;max-width:340px;
+  background:rgba(18,18,28,0.9);
+  border:1px solid var(--border-2);
+  border-radius:var(--r-xl);
+  padding:32px 24px 24px;
+  display:flex;flex-direction:column;align-items:center;gap:0;
+  text-align:center;
+  box-shadow:var(--sh-card);
+  animation:modalSlideUp 0.4s var(--spring);
+}
+@keyframes modalSlideUp{from{transform:translateY(40px) scale(0.95)}to{transform:none}}
+.modal-glass h2{
+  font-family:var(--f-display);font-size:1.4rem;font-weight:800;
+  margin:12px 0 0;
+}
+.modal-chicken{font-size:3rem;margin-bottom:4px}
+
+/* Game Over specific */
+.gameover-glass{}
+.go-chicken-anim{font-size:3rem;animation:goChicken 0.6s var(--spring)}
+@keyframes goChicken{from{transform:rotate(-20deg) scale(0.5)}to{transform:none}}
+.go-title{font-family:var(--f-display);font-size:1.5rem;font-weight:800;margin:10px 0 16px}
+.go-stats{
+  width:100%;
+  background:var(--glass-1);border:1px solid var(--border-1);
+  border-radius:var(--r-md);padding:12px 16px;
+  display:flex;flex-direction:column;gap:8px;margin-bottom:6px;
+}
+.go-stat{display:flex;justify-content:space-between;align-items:center;font-size:0.88rem}
+.go-stat span{color:var(--txt-2)}
+.go-stat strong{font-family:var(--f-display);font-weight:700}
+.go-stat--best{padding-top:8px;border-top:1px solid var(--border-1)}
+.go-stat--best strong{color:var(--gold)}
+
+.hud-pause-btn{pointer-events:all}
