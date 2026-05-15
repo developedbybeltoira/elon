@@ -44,7 +44,24 @@ const HomeScreen = (() => {
     // Equipped character emoji
     const charId = _player.equipped_character || 'og';
     const char = window.ECHICK_CONFIG.CHARACTERS.find(c => c.id === charId);
-    if (char) document.getElementById('chicken-sprite').textContent = char.emoji;
+    // Update hero character — try PNG first, fall back to SVG emoji
+    const charId2 = charId;
+    const heroImg = document.getElementById('hero-char-img');
+    const heroSvg = document.getElementById('hero-char-svg');
+    const spriteEl = document.getElementById('chicken-sprite');
+    if (heroImg) {
+      heroImg.src = `assets/char_${charId2}.png`;
+      heroImg.style.display = 'block';
+      heroImg.onerror = () => {
+        heroImg.style.display = 'none';
+        if (heroSvg) heroSvg.style.display = 'block';
+      };
+      heroImg.onload = () => {
+        heroImg.style.display = 'block';
+        if (heroSvg) heroSvg.style.display = 'none';
+      };
+    }
+    if (spriteEl && char) spriteEl.textContent = char.emoji; // legacy fallback
 
     // XP bar (cosmetic — based on total_runs)
     const xpPct = Math.min(100, ((_player.total_runs || 0) % 20) * 5);
