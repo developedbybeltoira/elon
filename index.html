@@ -175,7 +175,7 @@ img{display:block;max-width:100%}
 
 .screen{
   position:absolute;inset:0;
-  bottom:calc(var(--nav-h) + var(--safe-b) + 8px);
+  bottom:calc(var(--nav-h) + var(--safe-b) + 16px);
   overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;
   opacity:0;transform:translateY(14px) scale(0.99);
@@ -754,9 +754,9 @@ img{display:block;max-width:100%}
   padding-bottom:4px;
 }
 .store-tab.active{color:var(--gold);border-bottom-color:var(--gold)}
-.store-body{padding:16px;overflow-y:auto;flex:1}
+.store-body{padding:16px 16px 110px;overflow-y:auto;flex:1}
 
-.store-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.store-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding-bottom:0}
 
 .char-card{
   background:var(--glass-1);border:1px solid var(--border-1);
@@ -897,7 +897,7 @@ img{display:block;max-width:100%}
 .podium-col:nth-child(3) .pod-rank{color:#cd7f32}
 
 /* List */
-.lb-list{display:flex;flex-direction:column;gap:8px;padding:14px 16px 32px}
+.lb-list{display:flex;flex-direction:column;gap:8px;padding:14px 16px 110px}
 .lb-row{
   display:flex;align-items:center;gap:10px;
   background:var(--glass-1);border:1px solid var(--border-1);
@@ -914,6 +914,8 @@ img{display:block;max-width:100%}
 }
 .lb-avatar-icon{font-size:1.5rem;flex-shrink:0}
 .lb-avatar-wrap{width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--glass-2);border:1.5px solid var(--border-1);display:flex;align-items:center;justify-content:center}
+.lb-avatar-initial{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--f-display);font-size:.95rem;font-weight:800;color:#09090f;flex-shrink:0}
+.pod-avatar-initial{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--f-display);font-size:1.2rem;font-weight:800;color:#09090f}
 .lb-avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
 .lb-avatar-fallback{font-size:1.3rem;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
 .lb-player-info{flex:1;min-width:0}
@@ -927,7 +929,7 @@ img{display:block;max-width:100%}
    ══════════════════════════════════════════════════ */
 .ref-body{
   display:flex;flex-direction:column;align-items:center;
-  padding:20px 16px 32px;gap:16px;
+  padding:20px 16px 110px;gap:16px;
   overflow-y:auto;
 }
 .ref-hero-circle{
@@ -1185,7 +1187,7 @@ img{display:block;max-width:100%}
    SETTINGS.CSS
    ═══════════════════════════════════════════════════════ */
 
-.settings-body{padding:10px 16px 40px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.settings-body{padding:10px 16px 110px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
 
 .settings-section-label{
   font-size:0.63rem;font-weight:700;letter-spacing:0.12em;
@@ -2126,13 +2128,11 @@ const DB = (() => {
       .limit(limit);
 
     if (scope === 'weekly') {
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      query = _sb.from('run_logs')
-        .select('telegram_id, score, players!inner(username,display_name,best_distance,equipped_character)')
-        .eq('suspicious', false)
-        .gte('created_at', weekAgo)
-        .order('score', { ascending: false })
+      // Use the weekly_leaderboard view which includes photo_url
+      const { data: wData, error: wErr } = await _sb.from('weekly_leaderboard')
+        .select('*')
         .limit(limit);
+      if (!wErr && wData) return wData;
     }
     const { data, error } = await query;
     if (error) return [];
@@ -2147,10 +2147,21 @@ const DB = (() => {
       .select('id').eq('referrer_id', String(referrer_id)).eq('referred_id', String(new_user_id)).single();
     if (existing) return false;
 
-    await _sb.from('referrals').insert({ referrer_id: String(referrer_id), referred_id: String(new_user_id), created_at: new Date().toISOString() });
-    // Increment count
-    const { data: p } = await _sb.from('players').select('referral_count').eq('telegram_id', String(referrer_id)).single();
-    await _sb.from('players').update({ referral_count: (p?.referral_count || 0) + 1 }).eq('telegram_id', String(referrer_id));
+    await _sb.from('referrals').insert({
+      referrer_id: String(referrer_id),
+      referred_id: String(new_user_id),
+      created_at:  new Date().toISOString()
+    });
+    // Safely increment referral_count using read-then-write
+    const { data: rp } = await _sb.from('players')
+      .select('referral_count')
+      .eq('telegram_id', String(referrer_id))
+      .maybeSingle();
+    if (rp !== null) {
+      await _sb.from('players')
+        .update({ referral_count: (rp?.referral_count || 0) + 1 })
+        .eq('telegram_id', String(referrer_id));
+    }
     return true;
   }
 
@@ -2388,7 +2399,10 @@ const Auth = (() => {
 
     // Record referral if came via ref link
     if (_refCode && _refCode !== String(_tgUser.id)) {
-      DB.recordReferral(_refCode, _tgUser.id).catch(() => {});
+      try {
+        const refOk = await DB.recordReferral(_refCode, _tgUser.id);
+        if (refOk) console.log('[Auth] Referral recorded for referrer=' + _refCode);
+      } catch(e) { console.warn('[Auth] Ref failed', e); }
     }
 
     // Load admin referral lock setting from Supabase
@@ -2401,10 +2415,10 @@ const Auth = (() => {
         localStorage.setItem('admin_ref_lock', setting.value);
       } else {
         // Use localStorage fallback
-        window._adminRefLock = localStorage.getItem('admin_ref_lock') !== 'false';
+        window._adminRefLock = localStorage.getItem('admin_ref_lock') === 'true';
       }
     } catch(e) {
-      window._adminRefLock = localStorage.getItem('admin_ref_lock') !== 'false';
+      window._adminRefLock = localStorage.getItem('admin_ref_lock') === 'true';
     }
 
     // Check if captcha needed
@@ -2608,6 +2622,7 @@ const App = (() => {
     if (screen === 'leaderboard') Leaderboard.load();
     if (screen === 'store')       Store.render();
     if (screen === 'referrals')   Referrals.load();
+    if (screen === 'home')        HomeScreen.refreshFromDB?.();
   }
 
   function _positionIndicator(screen) {
@@ -2723,6 +2738,13 @@ const HomeScreen = (() => {
   function refreshPlayer(player) {
     _player = player;
     _render();
+  }
+
+  async function refreshFromDB() {
+    try {
+      const fresh = await DB.getPlayer(Auth.getUser()?.id);
+      if (fresh) { _player = fresh; Auth.setPlayer(fresh); _render(); }
+    } catch(e) {}
   }
 
   function _checkReferralGate() {
@@ -3019,7 +3041,7 @@ const HomeScreen = (() => {
     }, 300);
   }
 
-  return { init, refreshPlayer };
+  return { init, refreshPlayer, refreshFromDB };
 })();
 
 window.HomeScreen = HomeScreen;
@@ -4254,13 +4276,17 @@ const Leaderboard = (() => {
       const name   = player.username || player.display_name || 'Anonymous';
       const score  = (player.best_score || 0).toLocaleString();
 
+      const pInitial = (player.username || player.display_name || 'A').charAt(0).toUpperCase();
+      const pColors  = ['#f5c842','#ff8c42','#4ade80','#60a5fa','#a78bfa','#f87171','#34d399'];
+      const pBg      = pColors[(player.telegram_id?.toString().charCodeAt(0) || 65) % pColors.length];
+      const podImgHtml = player.photo_url
+        ? `<img src="${player.photo_url}" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block"
+             onerror="this.outerHTML='<div class=pod-avatar-initial style=background:${pBg}>${pInitial}</div>'" />`
+        : `<div class="pod-avatar-initial" style="background:${pBg}">${pInitial}</div>`;
+
       col.innerHTML = `
         <div class="pod-crown">${CROWNS[realRank-1]}</div>
-        <div class="pod-avatar">
-          ${player.photo_url
-            ? `<img src="${player.photo_url}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.style.display='none'" />`
-            : emoji}
-        </div>
+        <div class="pod-avatar">${podImgHtml}</div>
         <div class="pod-name">${name}</div>
         <div class="pod-score">${score}</div>
         <div class="pod-block">
@@ -4293,9 +4319,13 @@ const Leaderboard = (() => {
       const row = document.createElement('div');
       row.className = 'lb-row' + (isMe ? ' my-lb-row' : '');
       row.style.animationDelay = (i * 0.05) + 's';
+      const initial = (player.username || player.display_name || 'A').charAt(0).toUpperCase();
+      const colors = ['#f5c842','#ff8c42','#4ade80','#60a5fa','#a78bfa','#f87171','#34d399'];
+      const bgColor = colors[(player.telegram_id?.toString().charCodeAt(0) || 65) % colors.length];
       const avatarHtml = player.photo_url
-        ? `<img src="${player.photo_url}" class="lb-avatar-img" crossorigin="anonymous" referrerpolicy="no-referrer" alt="${name}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" /><span class="lb-avatar-fallback" style="display:none">${emoji}</span>`
-        : `<span class="lb-avatar-fallback">${emoji}</span>`;
+        ? `<img src="${player.photo_url}" class="lb-avatar-img" referrerpolicy="no-referrer" alt="${name}"
+            onerror="this.outerHTML='<span class=\'lb-avatar-fallback lb-avatar-initial\' style=\'background:${bgColor}\'>'+${JSON.stringify(initial)}+'</span>'" />`
+        : `<span class="lb-avatar-fallback lb-avatar-initial" style="background:${bgColor}">${initial}</span>`;
       row.innerHTML = `
         <div class="lb-rank-num">${rank}</div>
         <div class="lb-avatar-wrap">${avatarHtml}</div>
