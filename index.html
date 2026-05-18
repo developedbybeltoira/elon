@@ -1328,6 +1328,14 @@ body{background:transparent}
 /* Bottom nav always visible */
 .bottom-nav{z-index:1000 !important}
 
+/* ── Leaderboard scroll fix: content never overlaps nav ── */
+#screen-leaderboard{display:flex;flex-direction:column;overflow:hidden}
+.lb-scroll-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 24px)}
+
+/* ── Store scroll fix: content never overlaps nav ── */
+#screen-store{display:flex;flex-direction:column;overflow:hidden}
+.store-body{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 24px)}
+
 </style>
 </head>
 <body>
@@ -1391,7 +1399,7 @@ body{background:transparent}
 <div id="app" class="app hidden">
 
 <!-- HOME -->
-<div id="screen-home" class="screen" data-screen="home">
+<div id="screen-home" class="screen active" data-screen="home">
   <div class="home-bg-photo"></div>
   <canvas id="bg-canvas" class="bg-canvas"></canvas>
   <div class="home-wrap">
@@ -1577,8 +1585,10 @@ body{background:transparent}
     <button class="scope-btn" data-scope="weekly">WEEKLY</button>
     <button class="scope-btn" data-scope="alltime">ALL TIME</button>
   </div>
-  <div class="lb-podium" id="lb-podium"></div>
-  <div class="lb-list" id="lb-list"></div>
+  <div class="lb-scroll-body">
+    <div class="lb-podium" id="lb-podium"></div>
+    <div class="lb-list" id="lb-list"></div>
+  </div>
 </div>
 
 <!-- REFERRALS -->
@@ -1688,15 +1698,15 @@ const PROJECT = {
 };
 
 // ─── Characters ───
-const CHARS = [
-  {id:'guardian', name:'Guardian Chicken', price:0,    ability:'Shield Duration',   abilityDesc:'6-sec shield on hit',        owned:true, color:'#60a5fa'},
-  {id:'magnet',   name:'Magnet Chicken',   price:2500, ability:'Close Range Magnet', abilityDesc:'Pulls nearby coins to you',   owned:false,color:'#f87171'},
-  {id:'jumper',   name:'Jump Chicken',     price:3000, ability:'Double Jump',        abilityDesc:'Jump again mid-air',          owned:false,color:'#a78bfa'},
-  {id:'speed',    name:'Speed Chicken',    price:3500, ability:'Speed Boost',        abilityDesc:'25% faster movement',        owned:false,color:'#fbbf24'},
-  {id:'royal',    name:'Royal Chicken',    price:5000, ability:'Coin Multiplier',    abilityDesc:'Earn 2x coins per run',       owned:false,color:'#f5c842'},
+// Alias for backward compat
+  const CHARS = [
+  {id:'guardian', name:'Guardian Chicken', price:0,    ability:'Shield Duration',   abilityDesc:'6-sec shield on hit',      owned:true, color:'#60a5fa'},
+  {id:'magnet',   name:'Magnet Chicken',   price:2500, ability:'Close Range Magnet', abilityDesc:'Pulls nearby coins to you', owned:false,color:'#f87171'},
+  {id:'jumper',   name:'Jump Chicken',     price:3000, ability:'Double Jump',        abilityDesc:'Jump again mid-air',        owned:false,color:'#a78bfa'},
+  {id:'speed',    name:'Speed Chicken',    price:3500, ability:'Speed Boost',        abilityDesc:'25% faster movement',      owned:false,color:'#fbbf24'},
+  {id:'royal',    name:'Royal Chicken',    price:5000, ability:'Coin Multiplier',    abilityDesc:'Earn 2x coins per run',     owned:false,color:'#f5c842'},
 ];
-const CHARACTERS = CHARS; // alias for backward compat
-
+const CHARACTERS = CHARS; // alias
 
 // ─── Eggs (shop) ───
 const EGGS = [
@@ -2334,13 +2344,13 @@ const Auth = (() => {
     _updateBootText('loading your profile');
     await _sleep(400);
 
-    // Load/create player from DB — with 5s timeout so auth never hangs
+    // Load/create player from DB — with 8s timeout so boot never hangs
     try {
-      const playerPromise = DB.getOrCreatePlayer(_tgUser);
-      const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('DB timeout')), 5000));
-      _dbPlayer = await Promise.race([playerPromise, timeoutPromise]);
+      const dbPromise = DB.getOrCreatePlayer(_tgUser);
+      const dbTimeout = new Promise((_,rej) => setTimeout(() => rej(new Error('DB timeout')), 8000));
+      _dbPlayer = await Promise.race([dbPromise, dbTimeout]);
     } catch(e) {
-      console.warn('[Auth] DB error/timeout, using fallback', e);
+      console.warn('[Auth] DB fallback:', e.message);
       _dbPlayer = _makeFallbackPlayer(_tgUser);
     }
 
@@ -2352,20 +2362,15 @@ const Auth = (() => {
       } catch(e) { console.warn('[Auth] Ref failed', e); }
     }
 
-    // Load admin referral lock setting from Supabase (with timeout)
+    // Load admin referral lock — never block boot
     try {
       const sb2 = DB.getSb?.();
-      const settingPromise = sb2?.from?.('admin_settings')
-        ?.select('value')?.eq('key','referral_lock')?.single();
-      const settingTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 2000));
-      const { data: setting } = await Promise.race([settingPromise || Promise.reject(), settingTimeout])
-        .catch(() => ({ data: null }));
-      if (setting?.value !== undefined) {
-        window._adminRefLock = setting.value === 'true';
-        localStorage.setItem('admin_ref_lock', setting.value);
-      } else {
-        window._adminRefLock = localStorage.getItem('admin_ref_lock') === 'true';
-      }
+      const fetchPromise = sb2?.from('admin_settings')
+        .select('value').eq('key','referral_lock').maybeSingle();
+      const timeoutPromise = new Promise(r => setTimeout(() => r({ data: null }), 3000));
+      const { data: setting } = await Promise.race([fetchPromise, timeoutPromise]) || {};
+      window._adminRefLock = setting?.value === 'true';
+      if (setting?.value !== undefined) localStorage.setItem('admin_ref_lock', setting.value);
     } catch(e) {
       window._adminRefLock = localStorage.getItem('admin_ref_lock') === 'true';
     }
@@ -2466,61 +2471,36 @@ const Auth = (() => {
     const img   = document.getElementById('boot-avatar-img');
     const svg   = document.getElementById('boot-avatar-svg');
     const inner = document.getElementById('boot-avatar-inner');
-    if (!img) return;
+    if (!inner) return;
 
-    // Helper: show initials fallback
-    function _showInitials() {
-      img.style.display = 'none';
-      if (svg) svg.style.display = 'none';
-      if (inner) {
-        // Remove old initials if any
-        const old = inner.querySelector('.boot-initials');
-        if (old) old.remove();
-        const initDiv = document.createElement('div');
-        initDiv.className = 'boot-initials';
-        initDiv.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:Syne,sans-serif;font-weight:800;font-size:1.8rem;color:#f5c842';
-        initDiv.textContent = (user?.first_name || 'E').charAt(0).toUpperCase();
-        inner.appendChild(initDiv);
-      } else if (svg) {
-        svg.style.display = 'block';
-      }
+    // Always show initials first as instant placeholder
+    const name    = user?.first_name || user?.username || 'B';
+    const initial = name.charAt(0).toUpperCase();
+    const colors  = ['#f5c842','#ff8c42','#60a5fa','#4ade80','#a78bfa'];
+    const bgColor = colors[(user?.id || 0) % colors.length];
+
+    if (!inner.querySelector('.boot-initial')) {
+      const initDiv = document.createElement('div');
+      initDiv.className = 'boot-initial';
+      initDiv.style.cssText = `width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+        font-family:'Syne',sans-serif;font-weight:800;font-size:2rem;color:#09090f;
+        background:${bgColor};border-radius:50%;position:absolute;inset:0;`;
+      initDiv.textContent = initial;
+      inner.appendChild(initDiv);
     }
 
-    // Telegram photo_url is often blocked by CORS in WebApp context.
-    // Try loading it; if it fails within 2s, fall back to initials.
-    if (user?.photo_url) {
+    // Try photo_url if available
+    if (user?.photo_url && img) {
       img.crossOrigin = 'anonymous';
       img.referrerPolicy = 'no-referrer';
-      img.style.display = 'block';
-      if (svg) svg.style.display = 'none';
-
-      let loaded = false;
-      img.onload  = () => { loaded = true; if (svg) svg.style.display = 'none'; };
-      img.onerror = () => { _showInitials(); };
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;position:relative;z-index:1;display:block';
       img.src = user.photo_url;
-
-      // Timeout fallback — photo_url often silently hangs
-      setTimeout(() => { if (!loaded) _showInitials(); }, 2000);
-    } else {
-      _showInitials();
+      img.onerror = () => { img.style.display = 'none'; }; // keep initials showing
+    } else if (svg) {
+      svg.style.display = 'none';
     }
 
-    // Also update home avatar
-    const homeAv = document.getElementById('home-avatar');
-    if (homeAv && user?.photo_url) {
-      const avImg = document.createElement('img');
-      avImg.crossOrigin = 'anonymous';
-      avImg.referrerPolicy = 'no-referrer';
-      avImg.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
-      avImg.alt = 'avatar';
-      avImg.onerror = () => avImg.remove();
-      avImg.src = user.photo_url;
-      homeAv.innerHTML = '';
-      homeAv.appendChild(avImg);
-    }
-
-    // Update boot text with user name
-    setTimeout(() => _updateBootText(`Welcome, ${user?.first_name || 'Believer'}!`), 600);
+    setTimeout(() => _updateBootText(`Welcome, ${name}! 🐓`), 500);
   }
 
   return { boot, getUser, getPlayer, setPlayer, getTg, getRefCode };
@@ -2682,20 +2662,10 @@ const HomeScreen = (() => {
     document.getElementById('home-top-run').textContent = (_player.best_distance || 0).toLocaleString() + ' M';
     document.getElementById('home-total-eggs').textContent = (_player.total_coins || 0).toLocaleString();
 
-    // Avatar — update if not already set by boot loader
+    // Avatar
     if (_tgUser?.photo_url) {
       const av = document.getElementById('home-avatar');
-      if (av && !av.querySelector('img')) {
-        const avImg = document.createElement('img');
-        avImg.crossOrigin = 'anonymous';
-        avImg.referrerPolicy = 'no-referrer';
-        avImg.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
-        avImg.alt = 'avatar';
-        avImg.onerror = () => avImg.remove();
-        avImg.src = _tgUser.photo_url;
-        av.innerHTML = '';
-        av.appendChild(avImg);
-      }
+      av.innerHTML = `<img src="${_tgUser.photo_url}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="avatar" onerror="this.style.display='none'"/>`;
     }
 
     // Equipped character emoji
@@ -3082,9 +3052,9 @@ const GameEngine = (() => {
   let _comboTimer = 0;
 
   // ── Speed
-  let _speed     = 240; // px/s starting (slower intro)
-  const SPEED_MAX = 750;
-  const SPEED_INC = 6;   // per second (faster ramp-up)
+  let _speed     = 280; // px/s starting
+  const SPEED_MAX = 700;
+  const SPEED_INC = 4;   // per second
 
   // ── Environment
   let _envIndex  = 0;
@@ -3184,7 +3154,7 @@ const GameEngine = (() => {
     _groundY  = _H * GROUND_H;
     _score    = 0; _coins = 0; _distance = 0;
     _combo    = 1; _comboTimer = 0;
-    _speed    = 240;
+    _speed    = 280;
     _obstacles = []; _coinItems = []; _puItems = [];
     _powerups  = [];
     _obstTimer = 0; _coinTimer = 0;
@@ -3262,10 +3232,8 @@ const GameEngine = (() => {
     _obstTimer -= dt;
     if (_obstTimer <= 0) {
       _spawnObstacle();
-      // Spawn interval decreases as speed increases: from 2.2s (slow) down to 0.7s (max speed)
-      const speedFraction = (_speed - 240) / (750 - 240);
-      _obstInterval = Math.max(0.7, 2.2 - speedFraction * 1.5);
-      _obstTimer = _obstInterval + (Math.random() * 0.5 - 0.25);
+      _obstInterval = Math.max(0.6, 1.8 - _distance / 5000);
+      _obstTimer = _obstInterval + (Math.random() * 0.4 - 0.2);
     }
 
     // Spawn coins
@@ -4044,17 +4012,14 @@ const GameEngine = (() => {
   //  Collision
   // ─────────────────────────────────────────────
   function _collides(a, b) {
-    // Generous forgiveness margin for fair feel (obstacle hitbox inset)
-    const marginX = Math.min(b.w * 0.22, 14);
-    const marginY = Math.min(b.h * 0.18, 12);
-    const runnerMarginX = 10;
+    const margin = 10;
     const ah = a.ducking ? a.h * DUCK_H : a.h;
     const ay = _groundY - ah;
     return (
-      a.x + runnerMarginX < b.x + b.w - marginX &&
-      a.x + a.w - runnerMarginX > b.x + marginX &&
-      ay + 8 < b.y + b.h - marginY &&
-      ay + ah - 8 > b.y + marginY
+      a.x + margin < b.x + b.w - margin &&
+      a.x + a.w - margin > b.x + margin &&
+      ay + margin < b.y + b.h - margin &&
+      ay + ah - margin > b.y + margin
     );
   }
 
