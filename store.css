@@ -31,7 +31,7 @@
 .char-card:active{transform:scale(0.95)}
 .char-card.equipped{border-color:var(--gold-border);background:var(--gold-dim)}
 .char-card.owned-card{border-color:rgba(74,222,128,0.25)}
-.char-emoji{font-size:2.8rem;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.5));line-height:1}
+.char-emoji{font-size:2.8rem;filter:drop-shadow(0 6px 14px rgba(0,0,0,0.5));line-height:1;display:flex;align-items:center;justify-content:center}
 .char-name{font-family:var(--f-display);font-size:0.78rem;font-weight:700;line-height:1.2}
 .char-ability{font-size:0.68rem;color:var(--txt-3);line-height:1.3}
 .char-price{

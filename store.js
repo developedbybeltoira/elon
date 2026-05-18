@@ -47,7 +47,7 @@ const Store = (() => {
     const grid = document.createElement('div');
     grid.className = 'store-grid';
 
-    const owned    = _player?.owned_characters || ['og'];
+    const owned    = _player?.owned_characters || ['guardian'];
     const equipped = _player?.equipped_character || 'og';
 
     window.ECHICK_CONFIG.CHARACTERS.forEach(char => {
@@ -58,8 +58,44 @@ const Store = (() => {
       card.className = 'char-card' + (isEquipped ? ' equipped' : '') + (isOwned && !isEquipped ? ' owned-card' : '');
 
       // Try PNG first, fallback to emoji
-      const imgOrEmoji = `<img src="assets/char_${char.id}.png" class="char-emoji" alt="${char.name}"
-        onerror="this.outerHTML='<span class=char-emoji>${char.emoji}</span>'" />`;
+      const charColors = {
+        guardian: { body:'#e8e8f0', acc:'#60a5fa' },
+        magnet:   { body:'#8B5E3C', acc:'#ef4444' },
+        jumper:   { body:'#c8a060', acc:'#a855f7' },
+        speed:    { body:'#d4a853', acc:'#f59e0b' },
+        royal:    { body:'#d4af37', acc:'#f5c842' },
+      };
+      const cc = charColors[char.id] || { body:'#c8a060', acc:'#f5c842' };
+      const accessoryMap = {
+        guardian: `<circle cx="50" cy="50" r="42" fill="none" stroke="${cc.acc}" stroke-width="3" stroke-dasharray="10,5" opacity="0.8"/>`,
+        magnet:   `<rect x="28" y="10" width="44" height="16" rx="4" fill="#1e293b"/><rect x="24" y="16" width="52" height="8" rx="3" fill="#374151"/>`,
+        jumper:   `<ellipse cx="62" cy="32" rx="16" ry="6" fill="${cc.acc}" opacity="0.7"/><ellipse cx="50" cy="95" rx="20" ry="7" fill="${cc.acc}" opacity="0.4"/>`,
+        speed:    `<path d="M30 22 L70 22 L66 10 L34 10 Z" fill="#7c4a1e"/><ellipse cx="50" cy="23" rx="22" ry="5" fill="#5a3614"/>`,
+        royal:    `<polygon points="28,30 50,8 72,30 66,30 58,18 50,28 42,18 34,30" fill="#f5c842" stroke="#e8a020" stroke-width="1"/>`,
+      };
+      const acc = accessoryMap[char.id] || '';
+      const imgOrEmoji = `<svg viewBox="0 0 100 110" width="80" height="88" style="filter:drop-shadow(0 6px 16px rgba(0,0,0,0.5))">
+        <defs><radialGradient id="sg_${char.id}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="${cc.acc}" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="${cc.acc}" stop-opacity="0"/>
+        </radialGradient></defs>
+        <ellipse cx="50" cy="55" rx="46" ry="46" fill="url(#sg_${char.id})"/>
+        <ellipse cx="50" cy="62" rx="28" ry="22" fill="${cc.body}" stroke="rgba(0,0,0,0.25)" stroke-width="1.5"/>
+        <ellipse cx="56" cy="56" rx="18" ry="10" fill="${cc.acc}" opacity="0.7"/>
+        <path d="M18 60 L4 50 L10 44 L22 54Z" fill="${cc.acc}"/>
+        <path d="M18 66 L2 72 L8 78 L22 68Z" fill="${cc.acc}"/>
+        <circle cx="72" cy="44" r="14" fill="${cc.body}" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+        <circle cx="76" cy="42" r="3.5" fill="#111"/>
+        <circle cx="74.5" cy="40.5" r="1.2" fill="#fff"/>
+        <polygon points="84,44 96,45 84,49" fill="#f59e0b"/>
+        <path d="M62 32 Q68 28 72 30 Q76 26 72 30 Q68 32 62 32Z" fill="#ef4444"/>
+        <ellipse cx="74" cy="36" rx="3" ry="5" fill="#ef4444"/>
+        ${acc}
+        <line x1="44" y1="82" x2="40" y2="96" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+        <line x1="40" y1="96" x2="48" y2="96" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="56" y1="82" x2="60" y2="96" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+        <line x1="60" y1="96" x2="68" y2="96" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>`;
 
       card.innerHTML = `
         ${imgOrEmoji}
@@ -105,7 +141,7 @@ const Store = (() => {
       try {
         await DB.spendCoins(_player.telegram_id, char.price, char.id, 'character');
         _player.coins -= char.price;
-        if (!_player.owned_characters) _player.owned_characters = ['og'];
+        if (!_player.owned_characters) _player.owned_characters = ['guardian'];
         _player.owned_characters.push(char.id);
         Auth.setPlayer(_player);
         showToast(`✅ ${char.name} unlocked!`);
