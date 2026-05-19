@@ -589,7 +589,7 @@ img{display:block;max-width:100%}
    GAME.CSS — Gameplay Canvas · HUD · Overlays
    ══════════════════════════════════════════════════ */
 
-#screen-game{background:#000;overflow:hidden}
+#screen-game{background:#000;overflow:hidden;touch-action:none}
 .game-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
 /* ─── HUD Top ─── */
@@ -752,6 +752,7 @@ img{display:block;max-width:100%}
 .store-scroll-body{
   flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;
+  position:relative;z-index:1;
 }
 .store-tabs-row{
   display:flex;gap:0;padding:14px 16px 0;
@@ -858,18 +859,19 @@ img{display:block;max-width:100%}
 
 .scope-btn{
   flex:1;height:34px;border-radius:var(--r-pill);
-  font-family:var(--f-display);font-size:0.7rem;font-weight:700;letter-spacing:0.05em;
+  font-family:var(--f-display);font-size:0.68rem;font-weight:700;letter-spacing:0.03em;
   color:var(--txt-3);
   background:var(--glass-1);border:1px solid var(--border-1);
   transition:all 0.22s;
+  white-space:nowrap;overflow:hidden;
 }
 .scope-btn.active{background:var(--gold-dim);border-color:var(--gold-border);color:var(--gold)}
 
 /* Podium */
 .lb-podium{
   display:flex;align-items:flex-end;justify-content:center;
-  gap:6px;padding:20px 16px 0;
-  min-height:180px;
+  gap:6px;padding:36px 16px 0;
+  min-height:210px;
 }
 .podium-col{
   flex:1;max-width:120px;
@@ -904,6 +906,7 @@ img{display:block;max-width:100%}
 .lb-scroll-body{
   flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;
+  position:relative;z-index:1;
 }
 .lb-list{display:flex;flex-direction:column;gap:8px;padding:14px 16px 110px}
 .lb-row{
@@ -1264,7 +1267,9 @@ body{background:transparent}
   background:rgba(8,8,20,0.97) !important;
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
-  padding-bottom:10px;
+  padding:18px 18px 14px;
+  min-height:58px;
+  flex-shrink:0;
 }
 
 /* Bottom nav always visible */
@@ -3962,44 +3967,59 @@ const GameEngine = (() => {
   // ─────────────────────────────────────────────
   //  Input (touch + keyboard)
   // ─────────────────────────────────────────────
+  let _touchStartX = 0, _touchStartY = 0, _touchActive = false;
+
   function _bindInput() {
-    // Remove old listeners
+    // Remove old listeners from both targets cleanly
+    const _gs = document.getElementById('screen-game');
+    if (_gs) {
+      _gs.removeEventListener('touchstart', _onTouch);
+      _gs.removeEventListener('touchend',   _onTouchEnd);
+    }
     _cv.removeEventListener('touchstart', _onTouch);
     _cv.removeEventListener('touchend',   _onTouchEnd);
     document.removeEventListener('keydown', _onKey);
     document.removeEventListener('keyup',   _onKeyUp);
 
-    _cv.addEventListener('touchstart', _onTouch, { passive: false });
-    _cv.addEventListener('touchend',   _onTouchEnd, { passive: false });
-    // Also bind to screen-game so full screen is touchable
-    const _gameScreen = document.getElementById('screen-game');
-    if (_gameScreen) {
-      _gameScreen.addEventListener('touchstart', _onTouch, { passive: false });
-      _gameScreen.addEventListener('touchend',   _onTouchEnd, { passive: false });
+    // Bind ONLY to screen-game (covers full screen including HUD areas)
+    if (_gs) {
+      _gs.addEventListener('touchstart', _onTouch,   { passive: false });
+      _gs.addEventListener('touchend',   _onTouchEnd, { passive: false });
+    } else {
+      // Fallback to canvas
+      _cv.addEventListener('touchstart', _onTouch,   { passive: false });
+      _cv.addEventListener('touchend',   _onTouchEnd, { passive: false });
     }
     document.addEventListener('keydown', _onKey);
     document.addEventListener('keyup',   _onKeyUp);
   }
 
-  let _touchStartX = 0, _touchStartY = 0;
-
   function _onTouch(e) {
     e.preventDefault();
+    e.stopPropagation();
     if (_state !== 'running') return;
+    if (_touchActive) return; // deduplicate if somehow both fire
+    _touchActive = true;
     _touchStartX = e.touches[0].clientX;
     _touchStartY = e.touches[0].clientY;
   }
 
   function _onTouchEnd(e) {
     e.preventDefault();
+    e.stopPropagation();
+    _touchActive = false;
     if (_state !== 'running') return;
     const dx = e.changedTouches[0].clientX - _touchStartX;
     const dy = e.changedTouches[0].clientY - _touchStartY;
-    if (Math.abs(dy) > Math.abs(dx)) {
-      if (dy < -15) _jump();       // swipe up = jump
-      else if (dy > 15) _duck();   // swipe down = duck
-    } else if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
-      _jump(); // tap = jump
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 18) {
+      // Pure tap → jump
+      _jump();
+    } else if (Math.abs(dy) >= Math.abs(dx)) {
+      if (dy < 0) _jump();       // any upward swipe → jump
+      else        _duck();       // downward swipe → duck
+    } else {
+      _jump(); // horizontal swipe also jumps
     }
   }
 
@@ -4013,13 +4033,17 @@ const GameEngine = (() => {
   }
 
   function _jump() {
+    // Safety: recheck grounded state before jumping
+    const nearGround = _runner.y >= _groundY - _runner.h - 4;
+    if (nearGround) { _runner.grounded = true; _runner.vy = 0; }
+
     if (_runner.grounded) {
-      _runner.vy = JUMP_VEL * (_hasPowerup('fly') ? 1.3 : 1);
+      _runner.vy       = JUMP_VEL * (_hasPowerup('fly') ? 1.3 : 1);
       _runner.grounded = false;
       _runner.jumping  = true;
       Audio2.sfxJump();
     } else if (!_runner.doubleJumped && (_char?.ability === 'Double Jump' || _hasPowerup('fly'))) {
-      _runner.vy = JUMP_VEL * 0.85;
+      _runner.vy           = JUMP_VEL * 0.85;
       _runner.doubleJumped = true;
       Audio2.sfxJump();
     }
