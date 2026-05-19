@@ -3423,41 +3423,141 @@ const GameEngine = (() => {
   }
 
   function _drawObstacle(o) {
-    const cx = o.x+o.w/2, cy = o.y+o.h/2;
-    _ctx.save();
+    const x=o.x, y=o.y, w=o.w, h=o.h, cx=x+w/2, cy=y+h/2;
+    const ctx=_ctx;
+    ctx.save();
     if (o.type==='car') {
-      _ctx.fillStyle='#e11d48'; _ctx.fillRect(o.x, o.y+o.h*0.25, o.w, o.h*0.5);
-      _ctx.fillStyle='#fbbf24'; _ctx.fillRect(o.x+o.w*0.15, o.y+o.h*0.05, o.w*0.7, o.h*0.35);
-      _ctx.fillStyle='#111';
-      _ctx.beginPath(); _ctx.arc(o.x+o.w*0.22,o.y+o.h*0.78,o.h*0.18,0,Math.PI*2); _ctx.fill();
-      _ctx.beginPath(); _ctx.arc(o.x+o.w*0.78,o.y+o.h*0.78,o.h*0.18,0,Math.PI*2); _ctx.fill();
+      // Shadow
+      ctx.fillStyle='rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.ellipse(cx, y+h+4, w*0.45, 6, 0, 0, Math.PI*2); ctx.fill();
+      // Body
+      ctx.fillStyle='#e11d48';
+      ctx.fillRect(x+w*0.05, y+h*0.3, w*0.9, h*0.5);
+      // Roof
+      ctx.fillStyle='#b91c1c';
+      ctx.beginPath(); ctx.moveTo(x+w*0.2,y+h*0.3); ctx.lineTo(x+w*0.25,y+h*0.05); ctx.lineTo(x+w*0.75,y+h*0.05); ctx.lineTo(x+w*0.8,y+h*0.3); ctx.closePath(); ctx.fill();
+      // Windshield
+      ctx.fillStyle='rgba(147,210,255,0.7)';
+      ctx.beginPath(); ctx.moveTo(x+w*0.22,y+h*0.28); ctx.lineTo(x+w*0.27,y+h*0.08); ctx.lineTo(x+w*0.73,y+h*0.08); ctx.lineTo(x+w*0.78,y+h*0.28); ctx.closePath(); ctx.fill();
+      // Headlights
+      ctx.fillStyle='#fbbf24';
+      ctx.fillRect(x+w*0.82, y+h*0.35, w*0.1, h*0.14);
+      ctx.fillRect(x+w*0.08, y+h*0.35, w*0.1, h*0.14);
+      // Wheels
+      ctx.fillStyle='#111';
+      ctx.beginPath(); ctx.arc(x+w*0.22, y+h*0.82, h*0.17, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+w*0.78, y+h*0.82, h*0.17, 0, Math.PI*2); ctx.fill();
+      // Wheel shine
+      ctx.fillStyle='#555';
+      ctx.beginPath(); ctx.arc(x+w*0.22, y+h*0.82, h*0.09, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+w*0.78, y+h*0.82, h*0.09, 0, Math.PI*2); ctx.fill();
     } else if (o.type==='drone'||o.type==='satellite') {
-      var wb=Math.sin(Date.now()/300)*5;
-      _ctx.translate(0,wb);
-      _ctx.fillStyle='#475569'; _ctx.fillRect(o.x+o.w*0.2,o.y+o.h*0.2,o.w*0.6,o.h*0.6);
-      _ctx.strokeStyle='#94a3b8'; _ctx.lineWidth=2;
-      _ctx.beginPath(); _ctx.moveTo(o.x,o.y+o.h*0.1); _ctx.lineTo(o.x+o.w*0.35,o.y+o.h*0.35); _ctx.stroke();
-      _ctx.beginPath(); _ctx.moveTo(o.x+o.w,o.y+o.h*0.1); _ctx.lineTo(o.x+o.w*0.65,o.y+o.h*0.35); _ctx.stroke();
-      _ctx.fillStyle='rgba(148,163,184,0.5)';
-      _ctx.beginPath(); _ctx.ellipse(o.x+o.w*0.05,o.y+o.h*0.05,12,4,0,0,Math.PI*2); _ctx.fill();
-      _ctx.beginPath(); _ctx.ellipse(o.x+o.w*0.95,o.y+o.h*0.05,12,4,0,0,Math.PI*2); _ctx.fill();
+      const wb = Math.sin(Date.now()/250)*4;
+      ctx.translate(0, wb);
+      // Body
+      ctx.fillStyle='#334155';
+      ctx.fillRect(x+w*0.25, y+h*0.25, w*0.5, h*0.5);
+      // Arms
+      ctx.strokeStyle='#64748b'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(x+w*0.25,y+h*0.35); ctx.lineTo(x,y+h*0.1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+w*0.75,y+h*0.35); ctx.lineTo(x+w,y+h*0.1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+w*0.25,y+h*0.65); ctx.lineTo(x,y+h*0.9); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+w*0.75,y+h*0.65); ctx.lineTo(x+w,y+h*0.9); ctx.stroke();
+      // Rotors (spinning)
+      const rot = Date.now()/80;
+      ctx.strokeStyle='rgba(148,163,184,0.8)'; ctx.lineWidth=2;
+      [[x,y+h*0.1],[x+w,y+h*0.1],[x,y+h*0.9],[x+w,y+h*0.9]].forEach(function(pt){
+        ctx.beginPath(); ctx.moveTo(pt[0]+Math.cos(rot)*14, pt[1]+Math.sin(rot)*5); ctx.lineTo(pt[0]-Math.cos(rot)*14, pt[1]-Math.sin(rot)*5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pt[0]+Math.cos(rot+1.57)*14, pt[1]+Math.sin(rot+1.57)*5); ctx.lineTo(pt[0]-Math.cos(rot+1.57)*14, pt[1]-Math.sin(rot+1.57)*5); ctx.stroke();
+      });
+      // Camera
+      ctx.fillStyle='#1e293b'; ctx.beginPath(); ctx.arc(cx, cy+h*0.1, h*0.12, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#60a5fa'; ctx.beginPath(); ctx.arc(cx, cy+h*0.1, h*0.07, 0, Math.PI*2); ctx.fill();
+      // Blink
+      if (Math.floor(Date.now()/500)%2===0) { ctx.fillStyle='#ef4444'; ctx.beginPath(); ctx.arc(cx, y+h*0.35, 4, 0, Math.PI*2); ctx.fill(); }
     } else if (o.type==='rocket') {
-      _ctx.fillStyle='#94a3b8'; _ctx.fillRect(o.x+o.w*0.3,o.y+o.h*0.2,o.w*0.4,o.h*0.65);
-      _ctx.fillStyle='#ef4444';
-      _ctx.beginPath(); _ctx.moveTo(cx,o.y); _ctx.lineTo(o.x+o.w*0.3,o.y+o.h*0.25); _ctx.lineTo(o.x+o.w*0.7,o.y+o.h*0.25); _ctx.closePath(); _ctx.fill();
-      _ctx.fillStyle='#f59e0b';
-      _ctx.beginPath(); _ctx.ellipse(cx,o.y+o.h*0.92,o.w*0.14,o.h*0.18,0,0,Math.PI*2); _ctx.fill();
+      // Flame
+      const flicker = Math.sin(Date.now()/60)*6;
+      const fg = ctx.createLinearGradient(cx, y+h*0.85, cx, y+h+20+flicker);
+      fg.addColorStop(0,'#f59e0b'); fg.addColorStop(0.5,'#ef4444'); fg.addColorStop(1,'transparent');
+      ctx.fillStyle=fg;
+      ctx.beginPath(); ctx.moveTo(x+w*0.35,y+h*0.88); ctx.lineTo(cx, y+h+20+flicker); ctx.lineTo(x+w*0.65,y+h*0.88); ctx.closePath(); ctx.fill();
+      // Body gradient
+      const bg2 = ctx.createLinearGradient(x+w*0.3,0,x+w*0.7,0);
+      bg2.addColorStop(0,'#94a3b8'); bg2.addColorStop(0.5,'#e2e8f0'); bg2.addColorStop(1,'#94a3b8');
+      ctx.fillStyle=bg2; ctx.fillRect(x+w*0.3, y+h*0.2, w*0.4, h*0.7);
+      // Nose cone
+      ctx.fillStyle='#ef4444';
+      ctx.beginPath(); ctx.moveTo(cx,y); ctx.lineTo(x+w*0.3,y+h*0.22); ctx.lineTo(x+w*0.7,y+h*0.22); ctx.closePath(); ctx.fill();
+      // Window
+      ctx.fillStyle='rgba(147,210,255,0.8)';
+      ctx.beginPath(); ctx.arc(cx, y+h*0.42, w*0.1, 0, Math.PI*2); ctx.fill();
+      // Fins
+      ctx.fillStyle='#64748b';
+      ctx.beginPath(); ctx.moveTo(x+w*0.3,y+h*0.75); ctx.lineTo(x+w*0.05,y+h*0.9); ctx.lineTo(x+w*0.3,y+h*0.88); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x+w*0.7,y+h*0.75); ctx.lineTo(x+w*0.95,y+h*0.9); ctx.lineTo(x+w*0.7,y+h*0.88); ctx.closePath(); ctx.fill();
     } else if (o.type==='cone') {
-      _ctx.fillStyle='#f97316';
-      _ctx.beginPath(); _ctx.moveTo(cx,o.y); _ctx.lineTo(o.x+o.w,o.y+o.h); _ctx.lineTo(o.x,o.y+o.h); _ctx.closePath(); _ctx.fill();
+      // Shadow
+      ctx.fillStyle='rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.ellipse(cx, y+h+3, w*0.4, 5, 0, 0, Math.PI*2); ctx.fill();
+      // Cone body
+      ctx.fillStyle='#f97316';
+      ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(x+w, y+h); ctx.lineTo(x, y+h); ctx.closePath(); ctx.fill();
+      // White stripes
+      ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(cx-w*0.15,y+h*0.45); ctx.lineTo(cx+w*0.15,y+h*0.45); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx-w*0.28,y+h*0.72); ctx.lineTo(cx+w*0.28,y+h*0.72); ctx.stroke();
+      // Reflection
+      ctx.fillStyle='rgba(255,255,255,0.15)';
+      ctx.beginPath(); ctx.moveTo(cx,y+4); ctx.lineTo(cx-w*0.12,y+h*0.4); ctx.lineTo(cx-w*0.05,y+h*0.4); ctx.closePath(); ctx.fill();
+    } else if (o.type==='meme'||o.type==='debris') {
+      // Bomb
+      ctx.fillStyle='#1e293b';
+      ctx.beginPath(); ctx.arc(cx, cy+h*0.05, Math.min(w,h)*0.38, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#475569'; ctx.lineWidth=2; ctx.stroke();
+      // Fuse
+      ctx.strokeStyle='#92400e'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(cx+w*0.3, cy-h*0.3); ctx.quadraticCurveTo(cx+w*0.5, cy-h*0.6, cx+w*0.3, cy-h*0.75); ctx.stroke();
+      // Spark
+      if (Math.floor(Date.now()/150)%2===0) {
+        ctx.fillStyle='#fbbf24'; ctx.beginPath(); ctx.arc(cx+w*0.3, cy-h*0.75, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle='#f97316'; ctx.beginPath(); ctx.arc(cx+w*0.3+4, cy-h*0.75-4, 2.5, 0, Math.PI*2); ctx.fill();
+      }
+      // Skull
+      ctx.fillStyle='#fff'; ctx.font='bold '+(Math.min(w,h)*0.35)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('☠', cx, cy+h*0.06);
+    } else if (o.type==='box') {
+      // Crate
+      ctx.fillStyle='#7c3aed'; ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1.5; ctx.strokeRect(x+2,y+2,w-4,h-4);
+      ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(cx,y); ctx.lineTo(cx,y+h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x,cy); ctx.lineTo(x+w,cy); ctx.stroke();
+      // Warning label
+      ctx.fillStyle='#fbbf24'; ctx.font='bold '+(h*0.35)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('!', cx, cy);
+    } else if (o.type==='barrel') {
+      // Barrel
+      ctx.fillStyle='#92400e';
+      ctx.beginPath(); ctx.ellipse(cx,y+h*0.08,w*0.45,h*0.1,0,0,Math.PI*2); ctx.fill();
+      ctx.fillRect(x+w*0.06,y+h*0.08,w*0.88,h*0.84);
+      ctx.beginPath(); ctx.ellipse(cx,y+h*0.92,w*0.45,h*0.1,0,0,Math.PI*2); ctx.fill();
+      // Bands
+      ctx.strokeStyle='#78350f'; ctx.lineWidth=3;
+      [0.3,0.55,0.78].forEach(function(t){
+        ctx.beginPath(); ctx.moveTo(x+w*0.06,y+h*t); ctx.lineTo(x+w*0.94,y+h*t); ctx.stroke();
+      });
+      ctx.fillStyle='rgba(255,150,50,0.12)'; ctx.fillRect(x+w*0.06,y+h*0.08,w*0.88,h*0.84);
     } else {
-      var tc={box:'#7c3aed',barrel:'#92400e',man:'#059669',meme:'#dc2626',debris:'#1e293b',sign:'#0891b2'};
-      _ctx.fillStyle=tc[o.type]||'#6b7280'; _ctx.fillRect(o.x,o.y,o.w,o.h);
-      _ctx.fillStyle='#fff'; _ctx.font='bold '+Math.min(o.w,o.h)*0.45+'px sans-serif';
-      _ctx.textAlign='center'; _ctx.textBaseline='middle';
-      _ctx.fillText(o.type[0].toUpperCase(),cx,cy);
+      // Generic — colored block with glow
+      const tc={man:'#059669',rug:'#dc2626',sign:'#0891b2'};
+      ctx.fillStyle=tc[o.type]||'#6b7280'; ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2; ctx.strokeRect(x+1,y+1,w-2,h-2);
+      ctx.fillStyle='#fff'; ctx.font='bold '+(Math.min(w,h)*0.45)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(o.type[0].toUpperCase(), cx, cy);
     }
-    _ctx.restore();
+    ctx.restore();
   }
 
   function _drawCoin(c) {
@@ -3732,35 +3832,31 @@ const GameEngine = (() => {
   let _docTouchStart = null, _docTouchEnd = null;
 
   function _bindInput() {
-    // Remove previous listeners
-    if (_docTouchStart) document.removeEventListener('touchstart', _docTouchStart);
-    if (_docTouchEnd)   document.removeEventListener('touchend',   _docTouchEnd);
+    // Clean up old listeners
+    if (_docTouchStart) { document.removeEventListener('touchstart', _docTouchStart); _cv.removeEventListener('touchstart', _docTouchStart); }
+    if (_docTouchEnd)   { document.removeEventListener('touchend',   _docTouchEnd);   _cv.removeEventListener('touchend',   _docTouchEnd); }
     document.removeEventListener('keydown', _onKey);
     document.removeEventListener('keyup',   _onKeyUp);
 
-    // Bind on DOCUMENT — nothing can block this
     _docTouchStart = function(e) {
       if (_state !== 'running') return;
-      // Skip if touch is on a button/modal element
-      const tag = e.target.tagName;
-      if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT') return;
-      if (e.target.closest('.overlay-modal')) return;
-      e.preventDefault();
+      if (e.target.tagName === 'BUTTON') return;
+      try { e.preventDefault(); } catch(x){}
       _touchStartX = e.touches[0].clientX;
       _touchStartY = e.touches[0].clientY;
-      // Jump immediately on touch DOWN — instant feel
       _jump();
     };
 
     _docTouchEnd = function(e) {
       if (_state !== 'running') return;
-      if (e.target.closest('.overlay-modal')) return;
+      if (e.target.tagName === 'BUTTON') return;
       const dy = e.changedTouches[0].clientY - _touchStartY;
-      // Only duck on clear downward swipe (>40px down)
-      if (dy > 40) _duck();
-      else _duck(false); // release duck
+      if (dy > 50) { _duck(true); } else { _duck(false); }
     };
 
+    // Bind on BOTH canvas and document for maximum coverage
+    _cv.addEventListener('touchstart', _docTouchStart, { passive: false });
+    _cv.addEventListener('touchend',   _docTouchEnd,   { passive: false });
     document.addEventListener('touchstart', _docTouchStart, { passive: false });
     document.addEventListener('touchend',   _docTouchEnd,   { passive: false });
     document.addEventListener('keydown', _onKey);
@@ -3769,28 +3865,26 @@ const GameEngine = (() => {
 
   function _onKey(e) {
     if (_state !== 'running') return;
-    if (e.code === 'Space' || e.code === 'ArrowUp')   _jump();
+    if (e.code === 'Space' || e.code === 'ArrowUp') _jump();
     if (e.code === 'ArrowDown') _duck(true);
   }
-  function _onKeyUp(e) {
-    if (e.code === 'ArrowDown') _duck(false);
-  }
+  function _onKeyUp(e) { _duck(false); }
 
   function _jump() {
     if (_runner.grounded) {
-      _runner.vy       = JUMP_VEL * (_hasPowerup('fly') ? 1.3 : 1);
+      _runner.vy       = JUMP_VEL;
       _runner.grounded = false;
       _runner.jumping  = true;
       Audio2.sfxJump();
-    } else if (!_runner.doubleJumped && (_char?.ability === 'Double Jump' || _hasPowerup('fly'))) {
-      _runner.vy           = JUMP_VEL * 0.85;
+    } else if (!_runner.doubleJumped) {
+      _runner.vy           = JUMP_VEL * 0.8;
       _runner.doubleJumped = true;
       Audio2.sfxJump();
     }
   }
 
-  function _duck(active = true) {
-    _runner.ducking = active;
+  function _duck(active) {
+    _runner.ducking = (active === true);
   }
 
   // ─────────────────────────────────────────────
