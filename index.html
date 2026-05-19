@@ -3226,13 +3226,13 @@ const GameEngine = (() => {
       _runner.vy += GRAVITY * dt;
       _runner.y  += _runner.vy * dt;
     }
-    const targetH = _runner.ducking ? _runner.h * DUCK_H : (_charImg ? 90 : 80);
+    const targetH = _runner.ducking ? _runner.h * DUCK_H : _runner.h;
     const groundY = _groundY - targetH;
     if (_runner.y >= groundY) {
-      _runner.y = groundY;
-      _runner.vy = 0;
-      _runner.grounded  = true;
-      _runner.jumping   = false;
+      _runner.y        = groundY;
+      _runner.vy       = 0;
+      _runner.grounded = true;
+      _runner.jumping  = false;
       _runner.doubleJumped = false;
     }
   }
@@ -4046,12 +4046,6 @@ const GameEngine = (() => {
   }
 
   function _jump() {
-    // Ensure grounded check is accurate
-    if (_runner.y >= _groundY - _runner.h - 2) {
-      _runner.y        = _groundY - _runner.h;
-      _runner.grounded = true;
-      _runner.vy       = 0;
-    }
     if (_runner.grounded) {
       _runner.vy       = JUMP_VEL * (_hasPowerup('fly') ? 1.3 : 1);
       _runner.grounded = false;
