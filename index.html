@@ -1379,9 +1379,10 @@ body{background:transparent}
     <div class="home-hero-area">
       <div class="hero-chicken" id="hero-chicken">
         <img src="assets/chicken.png" class="hero-char-img" id="hero-char-img" alt="chicken"
-             style="width:130px;height:auto;object-fit:contain;display:block"
+             style="width:130px;height:auto;object-fit:contain;display:none"
+             onload="this.style.display='block';document.getElementById('hero-fallback').style.display='none'"
              onerror="this.style.display='none';document.getElementById('hero-fallback').style.display='block'"/>
-        <svg id="hero-fallback" viewBox="0 0 100 140" width="130" height="182" style="display:none;filter:drop-shadow(0 8px 24px rgba(245,200,66,0.4))">
+        <svg id="hero-fallback" viewBox="0 0 100 140" width="130" height="182" style="display:block;filter:drop-shadow(0 8px 24px rgba(245,200,66,0.4))">
           <ellipse cx="50" cy="95" rx="32" ry="40" fill="#c8a060" stroke="rgba(0,0,0,0.2)" stroke-width="1.5"/>
           <ellipse cx="56" cy="85" rx="20" ry="12" fill="#f5c842" opacity="0.6"/>
           <path d="M16 88 L2 78 L8 70 L20 80Z" fill="#f5c842"/>
@@ -3007,6 +3008,25 @@ const GameEngine = (() => {
     _player = playerData;
     _cv  = document.getElementById('game-canvas');
     _ctx = _cv.getContext('2d');
+    // Polyfill roundRect for Telegram WebView (Chrome < 99)
+    if (!_ctx.roundRect) {
+      _ctx.roundRect = function(x, y, w, h, r) {
+        if (typeof r === 'number') r = [r];
+        const [tl=0, tr=tl, br=tl, bl=tr] = r;
+        this.beginPath();
+        this.moveTo(x + tl, y);
+        this.lineTo(x + w - tr, y);
+        this.arcTo(x + w, y, x + w, y + tr, tr);
+        this.lineTo(x + w, y + h - br);
+        this.arcTo(x + w, y + h, x + w - br, y + h, br);
+        this.lineTo(x + bl, y + h);
+        this.arcTo(x, y + h, x, y + h - bl, bl);
+        this.lineTo(x, y + tl);
+        this.arcTo(x, y, x + tl, y, tl);
+        this.closePath();
+        return this;
+      };
+    }
     _resize();
     window.addEventListener('resize', _resize);
 
@@ -3107,7 +3127,7 @@ const GameEngine = (() => {
     _lastTime = now;
 
     _update(dt);
-    _draw();
+    try { _draw(); } catch(e) { console.warn('draw err:', e); }
     _updateHUD();
 
     // Anti-cheat periodic check every 3 seconds
@@ -3479,9 +3499,9 @@ const GameEngine = (() => {
       // Shield ring
       ctx.strokeStyle = 'rgba(96,165,250,0.7)';
       ctx.lineWidth = 3;
-      ctx.setLineDash([8, 4]);
+      if (ctx.setLineDash) ctx.setLineDash([8, 4]);
       ctx.beginPath(); ctx.ellipse(0, 0, bw * 1.15, bh * 1.15, 0, 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]);
+      if (ctx.setLineDash) ctx.setLineDash([]);
     } else if (charId === 'magnet') {
       // Cap
       ctx.fillStyle = '#1e293b';
