@@ -693,6 +693,7 @@ img{display:block;max-width:100%}
 /* ─── Overlay Modals (Pause / Game Over) ─── */
 .overlay-modal{
   position:absolute;inset:0;z-index:50;
+  pointer-events:all;
   background:rgba(8,8,14,0.88);
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   display:flex;align-items:center;justify-content:center;padding:24px;
@@ -1378,7 +1379,24 @@ body{background:transparent}
     <div class="home-hero-area">
       <div class="hero-chicken" id="hero-chicken">
         <img src="assets/chicken.png" class="hero-char-img" id="hero-char-img" alt="chicken"
-             style="width:130px;height:auto;object-fit:contain"/>
+             style="width:130px;height:auto;object-fit:contain;display:block"
+             onerror="this.style.display='none';document.getElementById('hero-fallback').style.display='block'"/>
+        <svg id="hero-fallback" viewBox="0 0 100 140" width="130" height="182" style="display:none;filter:drop-shadow(0 8px 24px rgba(245,200,66,0.4))">
+          <ellipse cx="50" cy="95" rx="32" ry="40" fill="#c8a060" stroke="rgba(0,0,0,0.2)" stroke-width="1.5"/>
+          <ellipse cx="56" cy="85" rx="20" ry="12" fill="#f5c842" opacity="0.6"/>
+          <path d="M16 88 L2 78 L8 70 L20 80Z" fill="#f5c842"/>
+          <path d="M16 96 L0 104 L6 112 L20 102Z" fill="#f5c842"/>
+          <circle cx="72" cy="60" r="20" fill="#c8a060" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+          <circle cx="78" cy="56" r="5" fill="#111"/><circle cx="76" cy="54" r="1.8" fill="#fff"/>
+          <polygon points="90,60 104,61 90,66" fill="#f59e0b"/>
+          <path d="M64 44 Q70 40 74 43 Q78 38 74 43 Q70 46 64 44Z" fill="#ef4444"/>
+          <ellipse cx="76" cy="49" rx="4" ry="6" fill="#ef4444"/>
+          <polygon points="32,32 50,12 68,32 62,32 56,20 50,30 44,20 38,32" fill="#f5c842" stroke="#e8a020" stroke-width="1.5"/>
+          <line x1="38" y1="132" x2="33" y2="148" stroke="#f59e0b" stroke-width="4" stroke-linecap="round"/>
+          <line x1="33" y1="148" x2="44" y2="148" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+          <line x1="62" y1="132" x2="67" y2="148" stroke="#f59e0b" stroke-width="4" stroke-linecap="round"/>
+          <line x1="67" y1="148" x2="78" y2="148" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+        </svg>
         <div class="chicken-glow"></div>
         <div class="chicken-shadow"></div>
       </div>
@@ -3022,11 +3040,21 @@ const GameEngine = (() => {
     _bindInput();
 
     // Pause / resume buttons
-    document.getElementById('btn-pause').onclick   = pause;
-    document.getElementById('btn-resume').onclick  = resume;
-    document.getElementById('btn-quit').onclick    = () => { _quit(); };
-    document.getElementById('btn-replay').onclick  = () => { _hideGameOver(); start(playerData); };
-    document.getElementById('btn-go-home').onclick = () => { _hideGameOver(); App.navigateTo('home'); };
+    const _pauseBtn  = document.getElementById('btn-pause');
+    const _resumeBtn = document.getElementById('btn-resume');
+    const _quitBtn   = document.getElementById('btn-quit');
+    _pauseBtn.onclick    = pause;
+    _resumeBtn.onclick   = resume;
+    _quitBtn.onclick     = () => { _quit(); };
+    _pauseBtn.ontouchend  = (e) => { e.preventDefault(); pause(); };
+    _resumeBtn.ontouchend = (e) => { e.preventDefault(); resume(); };
+    _quitBtn.ontouchend   = (e) => { e.preventDefault(); _quit(); };
+    const _replayBtn = document.getElementById('btn-replay');
+    const _homeBtn   = document.getElementById('btn-go-home');
+    _replayBtn.onclick   = () => { _hideGameOver(); start(playerData); };
+    _homeBtn.onclick     = () => { _hideGameOver(); App.navigateTo('home'); };
+    _replayBtn.ontouchend = (e) => { e.preventDefault(); _hideGameOver(); start(playerData); };
+    _homeBtn.ontouchend   = (e) => { e.preventDefault(); _hideGameOver(); App.navigateTo('home'); };
 
     _state = 'running';
     _lastTime = performance.now();
@@ -3060,6 +3088,7 @@ const GameEngine = (() => {
     _runner.ducking   = false;
     _runner.invincible = false;
     _runner.invincibleTimer = 0;
+    _touchActive = false;
 
     _buildLayers();
     _powerupRow.innerHTML = '';
@@ -3967,60 +3996,44 @@ const GameEngine = (() => {
   // ─────────────────────────────────────────────
   //  Input (touch + keyboard)
   // ─────────────────────────────────────────────
-  let _touchStartX = 0, _touchStartY = 0, _touchActive = false;
+  let _touchStartX = 0, _touchStartY = 0;
+  // Bound handler refs so we can remove them cleanly
+  let _docTouchStart = null, _docTouchEnd = null;
 
   function _bindInput() {
-    // Remove old listeners from both targets cleanly
-    const _gs = document.getElementById('screen-game');
-    if (_gs) {
-      _gs.removeEventListener('touchstart', _onTouch);
-      _gs.removeEventListener('touchend',   _onTouchEnd);
-    }
-    _cv.removeEventListener('touchstart', _onTouch);
-    _cv.removeEventListener('touchend',   _onTouchEnd);
+    // Remove previous listeners
+    if (_docTouchStart) document.removeEventListener('touchstart', _docTouchStart);
+    if (_docTouchEnd)   document.removeEventListener('touchend',   _docTouchEnd);
     document.removeEventListener('keydown', _onKey);
     document.removeEventListener('keyup',   _onKeyUp);
 
-    // Bind ONLY to screen-game (covers full screen including HUD areas)
-    if (_gs) {
-      _gs.addEventListener('touchstart', _onTouch,   { passive: false });
-      _gs.addEventListener('touchend',   _onTouchEnd, { passive: false });
-    } else {
-      // Fallback to canvas
-      _cv.addEventListener('touchstart', _onTouch,   { passive: false });
-      _cv.addEventListener('touchend',   _onTouchEnd, { passive: false });
-    }
+    // Bind on DOCUMENT — nothing can block this
+    _docTouchStart = function(e) {
+      if (_state !== 'running') return;
+      // Skip if touch is on a button/modal element
+      const tag = e.target.tagName;
+      if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT') return;
+      if (e.target.closest('.overlay-modal')) return;
+      e.preventDefault();
+      _touchStartX = e.touches[0].clientX;
+      _touchStartY = e.touches[0].clientY;
+      // Jump immediately on touch DOWN — instant feel
+      _jump();
+    };
+
+    _docTouchEnd = function(e) {
+      if (_state !== 'running') return;
+      if (e.target.closest('.overlay-modal')) return;
+      const dy = e.changedTouches[0].clientY - _touchStartY;
+      // Only duck on clear downward swipe (>40px down)
+      if (dy > 40) _duck();
+      else _duck(false); // release duck
+    };
+
+    document.addEventListener('touchstart', _docTouchStart, { passive: false });
+    document.addEventListener('touchend',   _docTouchEnd,   { passive: false });
     document.addEventListener('keydown', _onKey);
     document.addEventListener('keyup',   _onKeyUp);
-  }
-
-  function _onTouch(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (_state !== 'running') return;
-    if (_touchActive) return; // deduplicate if somehow both fire
-    _touchActive = true;
-    _touchStartX = e.touches[0].clientX;
-    _touchStartY = e.touches[0].clientY;
-  }
-
-  function _onTouchEnd(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    _touchActive = false;
-    if (_state !== 'running') return;
-    const dx = e.changedTouches[0].clientX - _touchStartX;
-    const dy = e.changedTouches[0].clientY - _touchStartY;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist < 18) {
-      // Pure tap → jump
-      _jump();
-    } else if (Math.abs(dy) >= Math.abs(dx)) {
-      if (dy < 0) _jump();       // any upward swipe → jump
-      else        _duck();       // downward swipe → duck
-    } else {
-      _jump(); // horizontal swipe also jumps
-    }
   }
 
   function _onKey(e) {
@@ -4033,10 +4046,12 @@ const GameEngine = (() => {
   }
 
   function _jump() {
-    // Safety: recheck grounded state before jumping
-    const nearGround = _runner.y >= _groundY - _runner.h - 4;
-    if (nearGround) { _runner.grounded = true; _runner.vy = 0; }
-
+    // Ensure grounded check is accurate
+    if (_runner.y >= _groundY - _runner.h - 2) {
+      _runner.y        = _groundY - _runner.h;
+      _runner.grounded = true;
+      _runner.vy       = 0;
+    }
     if (_runner.grounded) {
       _runner.vy       = JUMP_VEL * (_hasPowerup('fly') ? 1.3 : 1);
       _runner.grounded = false;
