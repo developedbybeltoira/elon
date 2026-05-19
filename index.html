@@ -176,7 +176,7 @@ img{display:block;max-width:100%}
 .screen{
   position:absolute;inset:0;
   bottom:calc(var(--nav-h) + var(--safe-b) + 16px);
-  overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  overflow:hidden;
   display:flex;flex-direction:column;
   opacity:0;transform:translateY(14px) scale(0.99);
   pointer-events:none;will-change:opacity,transform;
@@ -739,14 +739,7 @@ img{display:block;max-width:100%}
 /* ══════════════════════════════════════════════════
    STORE.CSS
    ══════════════════════════════════════════════════ */
-.store-tabs-row{
-  display:flex;gap:0;padding:14px 16px 0;
-  border-bottom:1px solid var(--border-1);
-  position:sticky;top:58px;z-index:16;
-  background:rgba(8,8,20,0.95);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-}
+
 .store-tab{
   flex:1;height:36px;
   font-family:var(--f-display);font-size:0.72rem;font-weight:700;letter-spacing:0.06em;
@@ -756,6 +749,17 @@ img{display:block;max-width:100%}
   padding-bottom:4px;
 }
 .store-tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.store-scroll-body{
+  flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;
+}
+.store-tabs-row{
+  display:flex;gap:0;padding:14px 16px 0;
+  border-bottom:1px solid var(--border-1);
+  position:sticky;top:0;z-index:15;
+  background:rgba(8,8,20,0.97);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
 .store-body{padding:16px 16px 120px;flex:1}
 
 .store-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding-bottom:0}
@@ -851,13 +855,7 @@ img{display:block;max-width:100%}
   border:1px solid rgba(255,140,66,0.2);
   border-radius:var(--r-pill);padding:4px 12px;
 }
-.lb-scope-row{
-  display:flex;gap:8px;padding:14px 16px 0;
-  position:sticky;top:58px;z-index:16;
-  background:rgba(8,8,20,0.95);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-}
+
 .scope-btn{
   flex:1;height:34px;border-radius:var(--r-pill);
   font-family:var(--f-display);font-size:0.7rem;font-weight:700;letter-spacing:0.05em;
@@ -903,6 +901,10 @@ img{display:block;max-width:100%}
 .podium-col:nth-child(3) .pod-rank{color:#cd7f32}
 
 /* List */
+.lb-scroll-body{
+  flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;
+}
 .lb-list{display:flex;flex-direction:column;gap:8px;padding:14px 16px 110px}
 .lb-row{
   display:flex;align-items:center;gap:10px;
@@ -936,7 +938,7 @@ img{display:block;max-width:100%}
 .ref-body{
   display:flex;flex-direction:column;align-items:center;
   padding:20px 16px 110px;gap:16px;
-  overflow-y:auto;
+  overflow-y:auto;flex:1;
 }
 .ref-hero-circle{
   width:120px;height:120px;border-radius:50%;
@@ -1028,73 +1030,7 @@ img{display:block;max-width:100%}
   word-break:break-all;cursor:pointer;line-height:1.4;
 }
 
-/* ══════════════════════════════════════════════════
-   ADMIN.CSS
-   ══════════════════════════════════════════════════ */
-.admin-modal{position:fixed;inset:0;z-index:9800;display:flex;align-items:flex-end;justify-content:center}
-.admin-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px)}
-.admin-sheet{
-  position:relative;z-index:1;
-  width:100%;max-width:500px;max-height:90vh;
-  background:rgba(15,15,22,0.98);
-  border:1px solid var(--border-2);
-  border-radius:var(--r-xl) var(--r-xl) 0 0;
-  padding:16px 20px 32px;
-  overflow-y:auto;
-  animation:sheetUp 0.4s var(--spring);
-}
-@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
-.admin-drag-handle{
-  width:40px;height:4px;border-radius:var(--r-pill);
-  background:var(--glass-3);margin:0 auto 18px;
-}
-.admin-title{font-family:var(--f-display);font-size:1.2rem;font-weight:800;margin-bottom:16px}
-.admin-error{font-size:0.8rem;color:var(--red);text-align:center;margin-top:6px}
-.admin-tabs-row{display:flex;gap:6px;margin-bottom:14px}
-.admin-tab{
-  flex:1;height:34px;border-radius:var(--r-pill);
-  font-family:var(--f-display);font-size:0.72rem;font-weight:700;
-  color:var(--txt-3);background:var(--glass-1);border:1px solid var(--border-1);
-  transition:all 0.2s;
-}
-.admin-tab.active{background:var(--gold-dim);border-color:var(--gold-border);color:var(--gold)}
-#admin-content{display:flex;flex-direction:column;gap:10px}
-.admin-player-row{
-  display:flex;align-items:center;gap:10px;
-  background:var(--glass-1);border:1px solid var(--border-1);
-  border-radius:var(--r-md);padding:11px 14px;
-}
-.admin-player-info{flex:1;min-width:0}
-.admin-player-name{font-weight:600;font-size:0.83rem}
-.admin-player-sub{font-size:0.68rem;color:var(--txt-3)}
-.admin-ban-btn{
-  height:28px;padding:0 12px;border-radius:var(--r-pill);
-  background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.25);
-  color:var(--red);font-size:0.72rem;font-weight:700;
-  transition:transform 0.15s var(--spring);
-}
-.admin-ban-btn:active{transform:scale(0.92)}
-.admin-unban-btn{background:rgba(74,222,128,0.12);border-color:rgba(74,222,128,0.25);color:var(--green)}
-.admin-json-pre{
-  background:var(--glass-1);border:1px solid var(--border-1);
-  border-radius:var(--r-md);padding:14px;
-  font-size:0.68rem;font-family:monospace;color:var(--txt-2);
-  white-space:pre-wrap;word-break:break-all;
-  max-height:400px;overflow-y:auto;
-}
-.log-entry{
-  padding:8px 12px;
-  background:var(--glass-1);border-left:2px solid var(--border-2);
-  border-radius:0 var(--r-xs) var(--r-xs) 0;
-  font-size:0.72rem;color:var(--txt-2);
-  margin-bottom:6px;
-}
-.log-entry.warn{border-left-color:var(--orange)}
-.log-entry.flag{border-left-color:var(--red)}
-.log-time{font-size:0.63rem;color:var(--txt-3);margin-top:3px}
-.admin-setting-row{display:flex;align-items:center;justify-content:space-between;background:var(--glass-1);border:1px solid var(--border-1);border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px}
-.admin-setting-label{font-weight:600;font-size:.87rem}
-.admin-setting-sub{font-size:.72rem;color:var(--txt-3);margin-top:2px}
+
 
 /* ══════════════════════════════════════════════════
    MODALS.CSS — Captcha
@@ -1145,7 +1081,7 @@ img{display:block;max-width:100%}
 .ref-body{
   display:flex;flex-direction:column;align-items:center;
   padding:20px 16px 32px;gap:16px;
-  overflow-y:auto;
+  overflow-y:auto;flex:1;
 }
 .ref-hero-circle{
   width:120px;height:120px;border-radius:50%;
@@ -1193,7 +1129,7 @@ img{display:block;max-width:100%}
    SETTINGS.CSS
    ═══════════════════════════════════════════════════════ */
 
-.settings-body{padding:10px 16px 110px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.settings-body{padding:10px 16px 110px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex:1}
 
 .settings-section-label{
   font-size:0.63rem;font-weight:700;letter-spacing:0.12em;
@@ -1251,72 +1187,7 @@ img{display:block;max-width:100%}
   background:rgba(245,200,66,0.06);padding:4px 6px;border-radius:4px;
 }
 
-/* ══════════════════════════════════════════════════
-   ADMIN.CSS
-   ══════════════════════════════════════════════════ */
 
-   ══════════════════════════════════════════════════ */
-.admin-modal{position:fixed;inset:0;z-index:9800;display:flex;align-items:flex-end;justify-content:center}
-.admin-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px)}
-.admin-sheet{
-  position:relative;z-index:1;
-  width:100%;max-width:500px;max-height:90vh;
-  background:rgba(15,15,22,0.98);
-  border:1px solid var(--border-2);
-  border-radius:var(--r-xl) var(--r-xl) 0 0;
-  padding:16px 20px 32px;
-  overflow-y:auto;
-  animation:sheetUp 0.4s var(--spring);
-}
-@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
-.admin-drag-handle{
-  width:40px;height:4px;border-radius:var(--r-pill);
-  background:var(--glass-3);margin:0 auto 18px;
-}
-.admin-title{font-family:var(--f-display);font-size:1.2rem;font-weight:800;margin-bottom:16px}
-.admin-error{font-size:0.8rem;color:var(--red);text-align:center;margin-top:6px}
-.admin-tabs-row{display:flex;gap:6px;margin-bottom:14px}
-.admin-tab{
-  flex:1;height:34px;border-radius:var(--r-pill);
-  font-family:var(--f-display);font-size:0.72rem;font-weight:700;
-  color:var(--txt-3);background:var(--glass-1);border:1px solid var(--border-1);
-  transition:all 0.2s;
-}
-.admin-tab.active{background:var(--gold-dim);border-color:var(--gold-border);color:var(--gold)}
-#admin-content{display:flex;flex-direction:column;gap:10px}
-.admin-player-row{
-  display:flex;align-items:center;gap:10px;
-  background:var(--glass-1);border:1px solid var(--border-1);
-  border-radius:var(--r-md);padding:11px 14px;
-}
-.admin-player-info{flex:1;min-width:0}
-.admin-player-name{font-weight:600;font-size:0.83rem}
-.admin-player-sub{font-size:0.68rem;color:var(--txt-3)}
-.admin-ban-btn{
-  height:28px;padding:0 12px;border-radius:var(--r-pill);
-  background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.25);
-  color:var(--red);font-size:0.72rem;font-weight:700;
-  transition:transform 0.15s var(--spring);
-}
-.admin-ban-btn:active{transform:scale(0.92)}
-.admin-unban-btn{background:rgba(74,222,128,0.12);border-color:rgba(74,222,128,0.25);color:var(--green)}
-.admin-json-pre{
-  background:var(--glass-1);border:1px solid var(--border-1);
-  border-radius:var(--r-md);padding:14px;
-  font-size:0.68rem;font-family:monospace;color:var(--txt-2);
-  white-space:pre-wrap;word-break:break-all;
-  max-height:400px;overflow-y:auto;
-}
-.log-entry{
-  padding:8px 12px;
-  background:var(--glass-1);border-left:2px solid var(--border-2);
-  border-radius:0 var(--r-xs) var(--r-xs) 0;
-  font-size:0.72rem;color:var(--txt-2);
-  margin-bottom:6px;
-}
-.log-entry.warn{border-left-color:var(--orange)}
-.log-entry.flag{border-left-color:var(--red)}
-.log-time{font-size:0.63rem;color:var(--txt-3);margin-top:3px}
 
 /* ══════════════════════════════════════════════════
 /* ═══════════════════════════════════════════════════════
@@ -1501,33 +1372,8 @@ body{background:transparent}
 
     <div class="home-hero-area">
       <div class="hero-chicken" id="hero-chicken">
-        <img src="assets/char_og.png" class="hero-char-img" id="hero-char-img" alt="chicken"
-             onerror="this.style.display='none';document.getElementById('hero-char-svg').style.display='block'"/>
-        <div class="hero-char-svg" id="hero-char-svg" style="display:none">
-          <svg viewBox="0 0 120 170" width="130" height="185" fill="none">
-            <ellipse cx="60" cy="110" rx="36" ry="50" fill="#f5f0e8"/>
-            <circle cx="60" cy="48" r="30" fill="#f5f0e8"/>
-            <path d="M50 22 Q54 10 58 20 Q62 8 66 20 Q70 12 72 22" fill="#ff4444" stroke="#dd2222" stroke-width="1"/>
-            <ellipse cx="58" cy="63" rx="5" ry="7" fill="#ff4444"/>
-            <rect x="42" y="38" width="16" height="12" rx="6" fill="none" stroke="#f5c842" stroke-width="2.5"/>
-            <rect x="62" y="38" width="16" height="12" rx="6" fill="none" stroke="#f5c842" stroke-width="2.5"/>
-            <line x1="58" y1="44" x2="62" y2="44" stroke="#f5c842" stroke-width="2"/>
-            <circle cx="50" cy="44" r="4" fill="#111"/><circle cx="52" cy="42" r="1.5" fill="#fff"/>
-            <circle cx="70" cy="44" r="4" fill="#111"/><circle cx="72" cy="42" r="1.5" fill="#fff"/>
-            <path d="M56 56 L60 65 L64 56Z" fill="#ff8c00"/>
-            <path d="M38 84 Q60 94 82 84" stroke="#f5c842" stroke-width="3" fill="none"/>
-            <circle cx="60" cy="93" r="5" fill="#f5c842"/>
-            <path d="M30 122 Q28 107 35 100 L60 110 L85 100 Q92 107 90 122Z" fill="#1a1a2e"/>
-            <text x="42" y="116" font-size="8" fill="#f5c842" font-weight="bold">ELON</text>
-            <text x="38" y="125" font-size="7.5" fill="#f5c842" font-weight="bold">CHICKEN</text>
-            <path d="M24 102 Q14 117 22 132 Q30 120 35 110Z" fill="#e8e0d0"/>
-            <path d="M96 102 Q106 117 98 132 Q90 120 85 110Z" fill="#e8e0d0"/>
-            <path d="M46 155 L40 165 M46 155 L44 167 M46 155 L50 167" stroke="#ff8c00" stroke-width="3" stroke-linecap="round"/>
-            <path d="M74 155 L68 165 M74 155 L72 167 M74 155 L78 167" stroke="#ff8c00" stroke-width="3" stroke-linecap="round"/>
-            <rect x="43" y="143" width="8" height="14" rx="2" fill="#ff8c00"/>
-            <rect x="71" y="143" width="8" height="14" rx="2" fill="#ff8c00"/>
-          </svg>
-        </div>
+        <img src="assets/chicken.png" class="hero-char-img" id="hero-char-img" alt="chicken"
+             style="width:130px;height:auto;object-fit:contain"/>
         <div class="chicken-glow"></div>
         <div class="chicken-shadow"></div>
       </div>
@@ -1629,27 +1475,31 @@ body{background:transparent}
       <span id="store-coins">0</span>
     </div>
   </div>
-  <div class="store-tabs-row">
-    <button class="store-tab active" data-tab="characters">CHARACTERS</button>
-    <button class="store-tab" data-tab="eggs">EGGS</button>
-    <button class="store-tab" data-tab="special">MUSIC</button>
+  <div class="store-scroll-body">
+    <div class="store-tabs-row">
+      <button class="store-tab active" data-tab="characters">CHARACTERS</button>
+      <button class="store-tab" data-tab="eggs">EGGS</button>
+      <button class="store-tab" data-tab="special">MUSIC</button>
+    </div>
+    <div id="store-body" class="store-body"></div>
   </div>
-  <div id="store-body" class="store-body"></div>
 </div>
 
 <!-- LEADERBOARD -->
 <div id="screen-leaderboard" class="screen" data-screen="leaderboard">
   <div class="screen-topbar">
     <h2 class="screen-heading">LEADERBOARD</h2>
-    <div class="lb-reset-badge" id="lb-reset-badge">Reset 7d</div>
+    <div class="lb-reset-badge" id="lb-reset-badge">WEEKLY</div>
   </div>
   <div class="lb-scope-row">
     <button class="scope-btn active" data-scope="global">GLOBAL</button>
     <button class="scope-btn" data-scope="weekly">WEEKLY</button>
     <button class="scope-btn" data-scope="alltime">ALL TIME</button>
   </div>
-  <div class="lb-podium" id="lb-podium"></div>
-  <div class="lb-list" id="lb-list"></div>
+  <div class="lb-scroll-body">
+    <div class="lb-podium" id="lb-podium"></div>
+    <div class="lb-list" id="lb-list"></div>
+  </div>
 </div>
 
 <!-- REFERRALS -->
@@ -1737,28 +1587,6 @@ body{background:transparent}
 </div><!-- #app -->
 
 <!-- ADMIN MODAL -->
-<div id="admin-modal" class="admin-modal hidden">
-  <div class="admin-overlay" id="admin-overlay"></div>
-  <div class="admin-sheet">
-    <div class="admin-drag-handle"></div>
-    <h2 class="admin-title">Admin Panel</h2>
-    <div id="admin-auth-form">
-      <input type="password" id="admin-pw-input" class="settings-input" placeholder="Password..."/>
-      <button class="primary-btn" id="btn-admin-login">Enter</button>
-      <p class="admin-error hidden" id="admin-error">Wrong password</p>
-    </div>
-    <div id="admin-panel" class="hidden">
-      <div class="admin-tabs-row">
-        <button class="admin-tab active" data-atab="players">Players</button>
-        <button class="admin-tab" data-atab="logs">Logs</button>
-        <button class="admin-tab" data-atab="json">JSON</button>
-        <button class="admin-tab" data-atab="settings">Settings</button>
-      </div>
-      <div id="admin-content"></div>
-    </div>
-  </div>
-</div>
-
 <div id="toast" class="toast hidden"></div>
 <script>
 'use strict';
@@ -2135,11 +1963,31 @@ const DB = (() => {
       .limit(limit);
 
     if (scope === 'weekly') {
-      // Use the weekly_leaderboard view which includes photo_url
-      const { data: wData, error: wErr } = await _sb.from('weekly_leaderboard')
-        .select('*')
-        .limit(limit);
-      if (!wErr && wData) return wData;
+      // Query run_logs for this week, aggregate by player
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: logs, error: wErr } = await _sb.from('run_logs')
+        .select('telegram_id,score,created_at')
+        .gte('created_at', weekAgo)
+        .order('score', { ascending: false });
+      if (!wErr && logs) {
+        // Aggregate: best score per player this week
+        const best = {};
+        logs.forEach(r => {
+          if (!best[r.telegram_id] || r.score > best[r.telegram_id]) best[r.telegram_id] = r.score;
+        });
+        const topIds = Object.entries(best).sort((a,b) => b[1]-a[1]).slice(0, limit).map(e => e[0]);
+        if (topIds.length > 0) {
+          const { data: players } = await _sb.from('players')
+            .select('telegram_id,username,display_name,photo_url,best_score,best_distance,equipped_character')
+            .in('telegram_id', topIds).eq('is_banned', false);
+          if (players) {
+            return players
+              .map(p => ({ ...p, best_score: best[p.telegram_id] }))
+              .sort((a,b) => b.best_score - a.best_score);
+          }
+        }
+      }
+      return [];
     }
     const { data, error } = await query;
     if (error) return [];
@@ -2324,6 +2172,7 @@ const Audio = (() => {
 
   return {
     loadDefault, loadCustom,
+    resume: () => { try { if (_ctx && _ctx.state === 'suspended') _ctx.resume(); } catch(e){} },
     playBg, pauseBg, stopBg,
     setMusicVol, setSfxVol,
     sfxCoin, sfxJump, sfxHit, sfxPowerup, sfxGameOver, sfxPurchase, sfxClick,
@@ -2776,7 +2625,7 @@ const HomeScreen = (() => {
       const count = _player?.referral_count || 0;
       const needed = window.ECHICK_CONFIG.PROJECT.referralsNeeded;
       // Check admin referral lock (can be disabled from admin panel)
-      const refLockEnabled = window._adminRefLock !== false && localStorage.getItem('admin_ref_lock') !== 'false';
+      const refLockEnabled = false; // Referral lock disabled by default
       if (refLockEnabled && count < needed) {
         document.getElementById('referral-gate').classList.remove('hidden');
         return;
@@ -2813,21 +2662,12 @@ const HomeScreen = (() => {
     });
   }
 
-  // ─── Hero tap (secret triple-tap for admin) ───
+  // ─── Hero tap (coin animation only) ───
   function _initHeroTap() {
     const hero = document.getElementById('hero-chicken');
-    let _tapTimer = null;
     hero.addEventListener('click', () => {
-      _heroTaps++;
       Audio2.sfxCoin();
       _showFloatingCoin(hero);
-      clearTimeout(_tapTimer);
-      _tapTimer = setTimeout(() => { _heroTaps = 0; }, 1000);
-      if (_heroTaps >= 7) {
-        _heroTaps = 0;
-        document.getElementById('admin-modal').classList.remove('hidden');
-        Audio2.sfxPowerup();
-      }
     });
   }
 
@@ -3102,9 +2942,9 @@ const GameEngine = (() => {
   let _comboTimer = 0;
 
   // ── Speed
-  let _speed     = 280; // px/s starting
-  const SPEED_MAX = 700;
-  const SPEED_INC = 4;   // per second
+  let _speed     = 260; // px/s starting
+  const SPEED_MAX = 750;
+  const SPEED_INC = 6;   // per second — ramps faster
 
   // ── Environment
   let _envIndex  = 0;
@@ -3188,6 +3028,7 @@ const GameEngine = (() => {
     cancelAnimationFrame(_raf);
     _raf = requestAnimationFrame(_loop);
 
+    try { Audio2.resume(); } catch(e){}
     Audio2.playBg();
   }
 
@@ -3198,7 +3039,7 @@ const GameEngine = (() => {
     _groundY  = _H * GROUND_H;
     _score    = 0; _coins = 0; _distance = 0;
     _combo    = 1; _comboTimer = 0;
-    _speed    = 280;
+    _speed    = 260;
     _obstacles = []; _coinItems = []; _puItems = [];
     _powerups  = [];
     _obstTimer = 0; _coinTimer = 0;
@@ -3970,7 +3811,7 @@ const GameEngine = (() => {
   }
 
   function _deactivatePowerup(p) {
-    if (p.id === 'slow' && _speed < 280) _speed = 280;
+    if (p.id === 'slow' && _speed < 260) _speed = 260;
     _renderPowerupSlots();
   }
 
@@ -4046,7 +3887,7 @@ const GameEngine = (() => {
     if (_hudScore)  _hudScore.textContent  = Math.floor(_score).toLocaleString();
     if (_hudCoins)  _hudCoins.textContent  = Math.floor(_coins).toLocaleString();
     if (_comboVal && _combo >= 2) _comboVal.textContent = 'x' + Math.floor(_combo);
-    const speedPct = Math.min(100, ((_speed - 280) / (SPEED_MAX - 280)) * 100);
+    const speedPct = Math.min(100, ((_speed - 260) / (SPEED_MAX - 260)) * 100);
     if (_speedFill) _speedFill.style.width = (20 + speedPct * 0.8) + '%';
     _attractCoins(1/60);
   }
@@ -4130,6 +3971,12 @@ const GameEngine = (() => {
 
     _cv.addEventListener('touchstart', _onTouch, { passive: false });
     _cv.addEventListener('touchend',   _onTouchEnd, { passive: false });
+    // Also bind to screen-game so full screen is touchable
+    const _gameScreen = document.getElementById('screen-game');
+    if (_gameScreen) {
+      _gameScreen.addEventListener('touchstart', _onTouch, { passive: false });
+      _gameScreen.addEventListener('touchend',   _onTouchEnd, { passive: false });
+    }
     document.addEventListener('keydown', _onKey);
     document.addEventListener('keyup',   _onKeyUp);
   }
@@ -4149,9 +3996,9 @@ const GameEngine = (() => {
     const dx = e.changedTouches[0].clientX - _touchStartX;
     const dy = e.changedTouches[0].clientY - _touchStartY;
     if (Math.abs(dy) > Math.abs(dx)) {
-      if (dy < -20) _jump();       // swipe up = jump
-      else if (dy > 20) _duck();   // swipe down = duck
-    } else {
+      if (dy < -15) _jump();       // swipe up = jump
+      else if (dy > 15) _duck();   // swipe down = duck
+    } else if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
       _jump(); // tap = jump
     }
   }
@@ -4657,23 +4504,7 @@ const Leaderboard = (() => {
   }
 
   function _startResetTimer() {
-    _updateResetBadge();
-    clearInterval(_resetInterval);
-    _resetInterval = setInterval(_updateResetBadge, 60000);
-  }
-
-  function _updateResetBadge() {
-    const el = document.getElementById('lb-reset-badge');
-    if (!el) return;
-    // Calculate days until next Monday 00:00
-    const now   = new Date();
-    const day   = now.getDay(); // 0=Sun, 1=Mon...
-    const daysUntil = (7 - day + 1) % 7 || 7;
-    const h     = now.getHours();
-    const m     = now.getMinutes();
-    const hoursLeft = daysUntil * 24 - h - m/60;
-    const daysLeft  = Math.floor(hoursLeft / 24);
-    el.textContent = `🔄 ${daysLeft}d reset`;
+    // No auto reset — badge is static
   }
 
   return { init, load };
@@ -4907,7 +4738,7 @@ const Admin = (() => {
 
   function _bindModal() {
     // Close overlay click
-    document.getElementById('admin-overlay')?.addEventListener('click', _close);
+    
 
     // Login
     document.getElementById('btn-admin-login').addEventListener('click', _login);
@@ -4937,7 +4768,7 @@ const Admin = (() => {
   }
 
   function _close() {
-    document.getElementById('admin-modal').classList.add('hidden');
+    
     // Reset auth on close for security
     _authed = false;
     document.getElementById('admin-auth-form').classList.remove('hidden');
