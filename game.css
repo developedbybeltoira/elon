@@ -2,6 +2,31 @@
    GAME.CSS — Gameplay Canvas · HUD · Overlays
    ══════════════════════════════════════════════════ */
 
+/* ─── Global scroll-lock (Telegram Mini App + browser) ─── */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+  height: 100%;
+  width: 100%;
+  position: fixed; /* prevents iOS rubber-band scroll */
+}
+
+#game-canvas,
+.game-canvas {
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#screen-game {
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
 #screen-game{background:#000;overflow:hidden}
 .game-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 

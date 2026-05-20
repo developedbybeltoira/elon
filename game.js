@@ -153,7 +153,7 @@ const GameEngine = (() => {
     _lastValidation = performance.now();
 
     _runner.x         = _W * 0.18;
-    _runner.y         = _groundY - _runner.h;
+    _runner.y         = _groundY - _runner.h;  // standing height, grounded
     _runner.vy        = 0;
     _runner.grounded  = true;
     _runner.jumping   = false;
@@ -294,19 +294,29 @@ const GameEngine = (() => {
   }
 
   function _updateRunner(dt) {
-    if (!_runner.grounded) {
-      _runner.vy += GRAVITY * dt;
-      _runner.y  += _runner.vy * dt;
-    }
-    const targetH = _runner.ducking ? _runner.h * DUCK_H : (_charImg ? 90 : 80);
-    const groundY = _groundY - targetH;
-    if (_runner.y >= groundY) {
-      _runner.y = groundY;
-      _runner.vy = 0;
-      _runner.grounded  = true;
-      _runner.jumping   = false;
+    // ── Single authoritative physics update ──────────────────────────────
+    // Apply gravity every frame (whether grounded or not keeps things stable)
+    _runner.vy += GRAVITY * dt;
+    _runner.y  += _runner.vy * dt;
+
+    // The effective height depends on duck state
+    const targetH = _runner.ducking ? _runner.h * DUCK_H : _runner.h;
+    // Ground position: top-left Y when standing on ground
+    const groundFloor = _groundY - targetH;
+
+    // Landing
+    if (_runner.y >= groundFloor) {
+      _runner.y           = groundFloor;
+      _runner.vy          = 0;
+      _runner.grounded    = true;
+      _runner.jumping     = false;
       _runner.doubleJumped = false;
+    } else {
+      _runner.grounded = false;
     }
+
+    // Debug — remove once confirmed working
+    // console.log({ y: _runner.y, vy: _runner.vy, grounded: _runner.grounded });
   }
 
   // ─────────────────────────────────────────────
@@ -625,7 +635,8 @@ const GameEngine = (() => {
   function _drawRunner() {
     const r  = _runner;
     const dh = r.ducking ? r.h * DUCK_H : r.h;
-    const ry = _groundY - dh;
+    // ── USE runner.y (set by physics), NOT hardcoded groundY ──
+    const ry = r.y;
 
     if (r.invincible && Math.floor(r.blinkTimer * 10) % 2 === 0) return;
 
@@ -912,7 +923,7 @@ const GameEngine = (() => {
     _renderPowerupSlots();
     // Apply effects
     if (puCfg.id === 'turbo' || puCfg.id === 'rocket') _speed = Math.min(SPEED_MAX, _speed * 1.4);
-    if (puCfg.id === 'fly')    { _runner.y = _groundY - _runner.h - 100; _runner.grounded = false; _runner.vy = -200; }
+    if (puCfg.id === 'fly')    { _runner.y = _groundY - _runner.h - 100; _runner.grounded = false; _runner.vy = JUMP_VEL * 1.3; }
     if (puCfg.id === 'slow')   _speed *= 0.6;
   }
 
@@ -963,7 +974,8 @@ const GameEngine = (() => {
   function _collides(a, b) {
     const margin = 10;
     const ah = a.ducking ? a.h * DUCK_H : a.h;
-    const ay = _groundY - ah;
+    // Use actual runner.y position set by physics, not a hardcoded ground calculation
+    const ay = a.y;
     return (
       a.x + margin < b.x + b.w - margin &&
       a.x + a.w - margin > b.x + margin &&
@@ -1069,44 +1081,106 @@ const GameEngine = (() => {
   //  Input (touch + keyboard)
   // ─────────────────────────────────────────────
   function _bindInput() {
-    // Remove old listeners
-    _cv.removeEventListener('touchstart', _onTouch);
-    _cv.removeEventListener('touchend',   _onTouchEnd);
+    // ── Clean up any previous listeners ──────────────────────────────────
+    const oldCv = _cv;
+    _cv.removeEventListener('touchstart',  _onTouchStart);
+    _cv.removeEventListener('touchmove',   _onTouchMove);
+    _cv.removeEventListener('touchend',    _onTouchEnd);
+    _cv.removeEventListener('touchcancel', _onTouchCancel);
     document.removeEventListener('keydown', _onKey);
     document.removeEventListener('keyup',   _onKeyUp);
 
-    _cv.addEventListener('touchstart', _onTouch, { passive: false });
-    _cv.addEventListener('touchend',   _onTouchEnd, { passive: false });
+    // ── Lock page scroll for Telegram Mini App & browsers ────────────────
+    document.documentElement.style.overflow       = 'hidden';
+    document.documentElement.style.touchAction    = 'none';
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.overflow                  = 'hidden';
+    document.body.style.touchAction               = 'none';
+    document.body.style.overscrollBehavior        = 'none';
+    document.body.style.height                    = '100%';
+
+    // ── Attach canvas listeners with passive:false to allow preventDefault ─
+    _cv.addEventListener('touchstart',  _onTouchStart,  { passive: false });
+    _cv.addEventListener('touchmove',   _onTouchMove,   { passive: false });
+    _cv.addEventListener('touchend',    _onTouchEnd,    { passive: false });
+    _cv.addEventListener('touchcancel', _onTouchCancel, { passive: false });
+
+    // Keyboard
     document.addEventListener('keydown', _onKey);
     document.addEventListener('keyup',   _onKeyUp);
   }
 
   let _touchStartX = 0, _touchStartY = 0;
+  let _touchIsDuck = false;   // tracks whether current touch is a duck-hold
 
-  function _onTouch(e) {
+  function _onTouchStart(e) {
     e.preventDefault();
     if (_state !== 'running') return;
-    _touchStartX = e.touches[0].clientX;
-    _touchStartY = e.touches[0].clientY;
+    const t = e.touches[0];
+    _touchStartX  = t.clientX;
+    _touchStartY  = t.clientY;
+    _touchIsDuck  = false;
+  }
+
+  function _onTouchMove(e) {
+    // Always prevent default — stops Telegram Mini App / browser from scrolling
+    e.preventDefault();
+    if (_state !== 'running') return;
+
+    const t = e.touches[0];
+    const dx = t.clientX - _touchStartX;
+    const dy = t.clientY - _touchStartY;
+
+    // Detect downward swipe early (threshold 15px) and hold duck while finger is down
+    if (!_touchIsDuck && Math.abs(dy) > Math.abs(dx) && dy > 15) {
+      _touchIsDuck = true;
+      _duck(true);
+    }
   }
 
   function _onTouchEnd(e) {
     e.preventDefault();
     if (_state !== 'running') return;
-    const dx = e.changedTouches[0].clientX - _touchStartX;
-    const dy = e.changedTouches[0].clientY - _touchStartY;
-    if (Math.abs(dy) > Math.abs(dx)) {
-      if (dy < -20) _jump();       // swipe up = jump
-      else if (dy > 20) _duck();   // swipe down = duck
-    } else {
-      _jump(); // tap = jump
+
+    // Always release duck when finger lifts
+    if (_touchIsDuck) {
+      _duck(false);
+      _touchIsDuck = false;
+      return; // don't also trigger jump
     }
+
+    const t       = e.changedTouches[0];
+    const dx      = t.clientX - _touchStartX;
+    const dy      = t.clientY - _touchStartY;
+    const absDx   = Math.abs(dx);
+    const absDy   = Math.abs(dy);
+
+    if (absDy > absDx && dy < -20) {
+      // Swipe UP → jump
+      _jump();
+    } else if (absDy <= absDx || (absDx < 15 && absDy < 15)) {
+      // Horizontal swipe or tap → jump
+      _jump();
+    }
+    // Swipe DOWN is already handled in touchmove; if somehow missed:
+    if (absDy > absDx && dy > 20 && !_touchIsDuck) {
+      _duck(true);
+      _touchIsDuck = true;
+      // Auto-release duck after 600 ms if touchend already fired
+      setTimeout(() => { _duck(false); _touchIsDuck = false; }, 600);
+    }
+  }
+
+  function _onTouchCancel(e) {
+    e.preventDefault();
+    // Release duck if finger is pulled away
+    if (_touchIsDuck) { _duck(false); _touchIsDuck = false; }
   }
 
   function _onKey(e) {
     if (_state !== 'running') return;
     if (e.code === 'Space' || e.code === 'ArrowUp')   _jump();
-    if (e.code === 'ArrowDown') _duck(true);
+    if (e.code === 'ArrowDown' && !e.repeat) _duck(true);
   }
   function _onKeyUp(e) {
     if (e.code === 'ArrowDown') _duck(false);
@@ -1114,19 +1188,32 @@ const GameEngine = (() => {
 
   function _jump() {
     if (_runner.grounded) {
-      _runner.vy = JUMP_VEL * (_hasPowerup('fly') ? 1.3 : 1);
-      _runner.grounded = false;
-      _runner.jumping  = true;
+      _runner.vy           = JUMP_VEL * (_hasPowerup('fly') ? 1.3 : 1);
+      _runner.grounded     = false;
+      _runner.jumping      = true;
+      _runner.doubleJumped = false;
       Audio2.sfxJump();
     } else if (!_runner.doubleJumped && (_char?.ability === 'Double Jump' || _hasPowerup('fly'))) {
-      _runner.vy = JUMP_VEL * 0.85;
+      // Double jump — full second jump, not reduced
+      _runner.vy           = JUMP_VEL * 0.9;
       _runner.doubleJumped = true;
       Audio2.sfxJump();
     }
   }
 
   function _duck(active = true) {
+    if (_runner.ducking === active) return; // no-op if already in that state
     _runner.ducking = active;
+
+    if (active) {
+      // Snap y to ducked ground position so physics is consistent
+      const duckFloor = _groundY - _runner.h * DUCK_H;
+      if (_runner.grounded) _runner.y = duckFloor;
+    } else {
+      // When standing back up, reposition to standing ground floor
+      const standFloor = _groundY - _runner.h;
+      if (_runner.grounded) _runner.y = standFloor;
+    }
   }
 
   // ─────────────────────────────────────────────
