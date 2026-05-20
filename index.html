@@ -1378,10 +1378,7 @@ body{background:transparent}
 
     <div class="home-hero-area">
       <div class="hero-chicken" id="hero-chicken">
-        <img src="assets/chicken.png" class="hero-char-img" id="hero-char-img" alt="chicken"
-             style="width:130px;height:auto;object-fit:contain;display:none"
-             onload="this.style.display='block';document.getElementById('hero-fallback').style.display='none'"
-             onerror="this.style.display='none';document.getElementById('hero-fallback').style.display='block'"/>
+        <img src="https://i.ibb.co/zVpsyMpH/x.png" class="hero-char-img" id="hero-char-img" alt="chicken" crossorigin="anonymous" style="width:130px;height:auto;object-fit:contain;display:block" onload="this.style.display='block';var f=document.getElementById('hero-fallback');if(f)f.style.display='none';" onerror="this.style.display='none';var f=document.getElementById('hero-fallback');if(f)f.style.display='block';">
         <svg id="hero-fallback" viewBox="0 0 100 140" width="130" height="182" style="display:block;filter:drop-shadow(0 8px 24px rgba(245,200,66,0.4))">
           <ellipse cx="50" cy="95" rx="32" ry="40" fill="#c8a060" stroke="rgba(0,0,0,0.2)" stroke-width="1.5"/>
           <ellipse cx="56" cy="85" rx="20" ry="12" fill="#f5c842" opacity="0.6"/>
@@ -1444,6 +1441,7 @@ body{background:transparent}
   <div class="game-hud">
     <div class="hud-block hud-block--left"><div class="hud-label">DISTANCE</div><div class="hud-value" id="hud-distance">0 M</div></div>
     <div class="hud-center-block">
+    <div id="hud-lives" style="font-size:1.1rem;letter-spacing:3px;pointer-events:none;padding:6px 10px;background:rgba(0,0,0,0.4);border-radius:20px">❤️❤️</div>
       <div class="egg-chip hud-coins">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none"><ellipse cx="12" cy="13" rx="7" ry="9" fill="#f5c842" stroke="#e8a020" stroke-width="1.2"/></svg>
         <span id="hud-coins">0</span>
@@ -1683,6 +1681,8 @@ const OBSTACLES = [
   { type:'box',      emoji:'📦', w:55, h:55,  score:8,  label:'Box!' },
   { type:'sign',     emoji:'🪧', w:40, h:70,  score:10, label:'Sign!' },
   { type:'debris',   emoji:'💥', w:50, h:50,  score:22, label:'Debris!' },
+  { type:'wall',     emoji:'🧱', w:22, h:90,  score:20, label:'Wall!' },
+  { type:'spike',    emoji:'⚠️', w:65, h:35,  score:15, label:'Spikes!' },
 ];
 
 // ─── Environments ───
@@ -2309,8 +2309,9 @@ const Auth = (() => {
     // Fade out loader
     const loader = document.getElementById('sdk-loader');
     loader.classList.add('fade-out');
-    await _sleep(700);
+    await _sleep(800);
     loader.classList.add('hidden');
+    loader.style.display = 'none';
 
     if (!captchaDone) {
       await _showCaptcha();
@@ -2940,8 +2941,11 @@ const GameEngine = (() => {
   // ── Physics
   const GROUND_H = 0.72; // fraction of canvas height
   let _groundY   = 0;
-  const GRAVITY   = 2400; // px/s²
-  const JUMP_VEL  = -820;
+  // Pixel-based physics (scaled by dt for frame-rate independence)
+  // gravity=0.8px/frame @ 60fps = 0.8*60=48px/s per frame → *60 = 2880px/s²
+  // jumpForce=-18px/frame @ 60fps = -18*60=1080px/s
+  const GRAVITY   = 2880; // px/s² (0.8 * 60fps * 60)
+  const JUMP_VEL  = -1080; // px/s (-18 * 60fps)
   const DUCK_H    = 0.55; // fraction of normal height
 
   // ── Runner object
@@ -2962,6 +2966,7 @@ const GameEngine = (() => {
   let _score    = 0;
   let _coins    = 0;
   let _distance = 0;
+  let _lives    = 2;
   let _combo    = 1;
   let _comboTimer = 0;
 
@@ -3109,6 +3114,8 @@ const GameEngine = (() => {
     _runner.invincible = false;
     _runner.invincibleTimer = 0;
     _touchActive = false;
+    _lives = 2;
+    _updateLivesHUD();
 
     _buildLayers();
     _powerupRow.innerHTML = '';
@@ -3242,19 +3249,22 @@ const GameEngine = (() => {
   }
 
   function _updateRunner(dt) {
-    if (!_runner.grounded) {
-      _runner.vy += GRAVITY * dt;
-      _runner.y  += _runner.vy * dt;
-    }
+    // Apply gravity always (spec: velocityY += gravity each frame)
+    _runner.vy += GRAVITY * dt;
+    // Apply velocity
+    _runner.y  += _runner.vy * dt;
+    // Landing — ONLY when moving downward (velocityY > 0) per spec
     const targetH = _runner.ducking ? _runner.h * DUCK_H : _runner.h;
     const groundY = _groundY - targetH;
-    if (_runner.y >= groundY) {
+    if (_runner.y >= groundY && _runner.vy > 0) {
       _runner.y        = groundY;
       _runner.vy       = 0;
       _runner.grounded = true;
       _runner.jumping  = false;
       _runner.doubleJumped = false;
     }
+    // Clamp — never go above canvas top
+    if (_runner.y < -_runner.h) { _runner.y = -_runner.h; _runner.vy = 0; }
   }
 
   // ─────────────────────────────────────────────
@@ -3548,8 +3558,23 @@ const GameEngine = (() => {
         ctx.beginPath(); ctx.moveTo(x+w*0.06,y+h*t); ctx.lineTo(x+w*0.94,y+h*t); ctx.stroke();
       });
       ctx.fillStyle='rgba(255,150,50,0.12)'; ctx.fillRect(x+w*0.06,y+h*0.08,w*0.88,h*0.84);
+    } else if (o.type==='wall') {
+      const rows=4, bH=h/rows;
+      for(let r=0;r<rows;r++){
+        ctx.fillStyle=r%2===0?'#b91c1c':'#991b1b'; ctx.fillRect(x,y+r*bH,w,bH-1);
+        ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1;
+        const off=r%2===0?0:w*0.5;
+        for(let b=0;b<3;b++){const bx=x+off+b*(w*0.65);if(bx>x&&bx<x+w){ctx.beginPath();ctx.moveTo(bx,y+r*bH);ctx.lineTo(bx,y+r*bH+bH-1);ctx.stroke();}}
+      }
+    } else if (o.type==='spike') {
+      ctx.fillStyle='#475569'; ctx.fillRect(x,y+h*0.6,w,h*0.4);
+      const cnt=Math.max(3,Math.round(w/14));
+      for(let s=0;s<cnt;s++){
+        const sx=x+w*(s+0.5)/cnt;
+        ctx.fillStyle='#94a3b8'; ctx.beginPath(); ctx.moveTo(sx-7,y+h*0.62); ctx.lineTo(sx,y); ctx.lineTo(sx+7,y+h*0.62); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(sx-2,y+h*0.5); ctx.lineTo(sx,y+h*0.08); ctx.stroke();
+      }
     } else {
-      // Generic — colored block with glow
       const tc={man:'#059669',rug:'#dc2626',sign:'#0891b2'};
       ctx.fillStyle=tc[o.type]||'#6b7280'; ctx.fillRect(x,y,w,h);
       ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2; ctx.strokeRect(x+1,y+1,w-2,h-2);
@@ -3760,7 +3785,22 @@ const GameEngine = (() => {
   // ─────────────────────────────────────────────
   //  Die
   // ─────────────────────────────────────────────
+  function _updateLivesHUD() {
+    const el = document.getElementById('hud-lives');
+    if (el) el.innerHTML = (_lives >= 2 ? '❤️❤️' : _lives === 1 ? '❤️🖤' : '🖤🖤');
+  }
+
   function _die() {
+    Audio2.sfxHit();
+    _lives--;
+    _updateLivesHUD();
+    if (_lives > 0) {
+      // Lost a life — keep running with brief invincibility
+      _runner.invincible = true;
+      _runner.invincibleTimer = 2.2;
+      _showPopup('💔 -1 Life!');
+      return;
+    }
     _state = 'dead';
     cancelAnimationFrame(_raf);
     Audio2.sfxGameOver();
@@ -3831,32 +3871,43 @@ const GameEngine = (() => {
   // Bound handler refs so we can remove them cleanly
   let _docTouchStart = null, _docTouchEnd = null;
 
+  let _swipeStartY = 0;
+
   function _bindInput() {
-    // Clean up old listeners
-    if (_docTouchStart) { document.removeEventListener('touchstart', _docTouchStart); _cv.removeEventListener('touchstart', _docTouchStart); }
-    if (_docTouchEnd)   { document.removeEventListener('touchend',   _docTouchEnd);   _cv.removeEventListener('touchend',   _docTouchEnd); }
+    // Remove ALL previous listeners cleanly
+    if (_docTouchStart) {
+      document.removeEventListener('touchstart', _docTouchStart);
+      document.removeEventListener('touchend',   _docTouchEnd);
+    }
     document.removeEventListener('keydown', _onKey);
     document.removeEventListener('keyup',   _onKeyUp);
 
     _docTouchStart = function(e) {
-      if (_state !== 'running') return;
-      if (e.target.tagName === 'BUTTON') return;
-      try { e.preventDefault(); } catch(x){}
-      _touchStartX = e.touches[0].clientX;
-      _touchStartY = e.touches[0].clientY;
-      _jump();
+      // Let buttons handle themselves
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+      _swipeStartY = e.touches[0].clientY;
+      try { e.preventDefault(); } catch(x) {}
     };
 
     _docTouchEnd = function(e) {
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
       if (_state !== 'running') return;
-      if (e.target.tagName === 'BUTTON') return;
-      const dy = e.changedTouches[0].clientY - _touchStartY;
-      if (dy > 50) { _duck(true); } else { _duck(false); }
+      try { e.preventDefault(); } catch(x) {}
+      const dy = e.changedTouches[0].clientY - _swipeStartY;
+      if (dy < -10) {
+        // Swipe UP → jump
+        _jump();
+      } else if (dy > 30) {
+        // Swipe DOWN → duck
+        _duck(true);
+        setTimeout(function() { _duck(false); }, 500);
+      } else {
+        // Tap → also jump
+        _jump();
+      }
     };
 
-    // Bind on BOTH canvas and document for maximum coverage
-    _cv.addEventListener('touchstart', _docTouchStart, { passive: false });
-    _cv.addEventListener('touchend',   _docTouchEnd,   { passive: false });
+    // ONLY document — single listener, no duplicates
     document.addEventListener('touchstart', _docTouchStart, { passive: false });
     document.addEventListener('touchend',   _docTouchEnd,   { passive: false });
     document.addEventListener('keydown', _onKey);
@@ -3866,24 +3917,26 @@ const GameEngine = (() => {
   function _onKey(e) {
     if (_state !== 'running') return;
     if (e.code === 'Space' || e.code === 'ArrowUp') _jump();
-    if (e.code === 'ArrowDown') _duck(true);
+    if (e.code === 'ArrowDown') { _duck(true); setTimeout(function(){_duck(false);}, 500); }
   }
-  function _onKeyUp(e) { _duck(false); }
+  function _onKeyUp(e) {}
 
   function _jump() {
-    if (_runner.grounded) {
-      _runner.vy       = JUMP_VEL;
-      _runner.grounded = false;
-      _runner.jumping  = true;
-      Audio2.sfxJump();
-    } else if (!_runner.doubleJumped) {
-      _runner.vy           = JUMP_VEL * 0.8;
-      _runner.doubleJumped = true;
-      Audio2.sfxJump();
-    }
+    // Spec: if not grounded → no jump
+    if (!_runner.grounded) return;
+    // Spec: no jump while ducking
+    if (_runner.ducking) return;
+    // JUMP
+    _runner.vy       = JUMP_VEL;
+    _runner.grounded = false;
+    _runner.jumping  = true;
+    _runner.ducking  = false;
+    Audio2.sfxJump();
   }
 
   function _duck(active) {
+    // Spec: no duck while jumping
+    if (!_runner.grounded && active) return;
     _runner.ducking = (active === true);
   }
 
@@ -4302,7 +4355,7 @@ const Leaderboard = (() => {
       const pColors  = ['#f5c842','#ff8c42','#4ade80','#60a5fa','#a78bfa','#f87171','#34d399'];
       const pBg      = pColors[(player.telegram_id?.toString().charCodeAt(0) || 65) % pColors.length];
       const podImgHtml = player.photo_url
-        ? `<img src="${player.photo_url}" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block"
+        ? `<img src="${player.photo_url}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block"
              onerror="this.outerHTML='<div class=pod-avatar-initial style=background:${pBg}>${pInitial}</div>'" />`
         : `<div class="pod-avatar-initial" style="background:${pBg}">${pInitial}</div>`;
 
@@ -4345,7 +4398,7 @@ const Leaderboard = (() => {
       const colors = ['#f5c842','#ff8c42','#4ade80','#60a5fa','#a78bfa','#f87171','#34d399'];
       const bgColor = colors[(player.telegram_id?.toString().charCodeAt(0) || 65) % colors.length];
       const avatarHtml = player.photo_url
-        ? `<img src="${player.photo_url}" class="lb-avatar-img" referrerpolicy="no-referrer" alt="${name}"
+        ? `<img src="${player.photo_url}" class="lb-avatar-img" crossorigin="anonymous" referrerpolicy="no-referrer" alt="${name}"
             onerror="this.outerHTML='<span class=\'lb-avatar-fallback lb-avatar-initial\' style=\'background:${bgColor}\'>'+${JSON.stringify(initial)}+'</span>'" />`
         : `<span class="lb-avatar-fallback lb-avatar-initial" style="background:${bgColor}">${initial}</span>`;
       row.innerHTML = `
