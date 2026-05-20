@@ -1378,23 +1378,12 @@ body{background:transparent}
 
     <div class="home-hero-area">
       <div class="hero-chicken" id="hero-chicken">
-        <img src="https://i.ibb.co/zVpsyMpH/x.png" id="hero-char-img" class="hero-char-img" crossorigin="anonymous" style="width:130px;height:130px;object-fit:contain;display:block;" alt="chicken">
-        <svg id="hero-fallback" viewBox="0 0 100 140" width="130" height="182" style="display:none;filter:drop-shadow(0 8px 24px rgba(245,200,66,0.4))">
-          <ellipse cx="50" cy="95" rx="32" ry="40" fill="#c8a060" stroke="rgba(0,0,0,0.2)" stroke-width="1.5"/>
-          <ellipse cx="56" cy="85" rx="20" ry="12" fill="#f5c842" opacity="0.6"/>
-          <path d="M16 88 L2 78 L8 70 L20 80Z" fill="#f5c842"/>
-          <path d="M16 96 L0 104 L6 112 L20 102Z" fill="#f5c842"/>
-          <circle cx="72" cy="60" r="20" fill="#c8a060" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
-          <circle cx="78" cy="56" r="5" fill="#111"/><circle cx="76" cy="54" r="1.8" fill="#fff"/>
-          <polygon points="90,60 104,61 90,66" fill="#f59e0b"/>
-          <path d="M64 44 Q70 40 74 43 Q78 38 74 43 Q70 46 64 44Z" fill="#ef4444"/>
-          <ellipse cx="76" cy="49" rx="4" ry="6" fill="#ef4444"/>
-          <polygon points="32,32 50,12 68,32 62,32 56,20 50,30 44,20 38,32" fill="#f5c842" stroke="#e8a020" stroke-width="1.5"/>
-          <line x1="38" y1="132" x2="33" y2="148" stroke="#f59e0b" stroke-width="4" stroke-linecap="round"/>
-          <line x1="33" y1="148" x2="44" y2="148" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
-          <line x1="62" y1="132" x2="67" y2="148" stroke="#f59e0b" stroke-width="4" stroke-linecap="round"/>
-          <line x1="67" y1="148" x2="78" y2="148" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
-        </svg>
+        <img src="https://i.ibb.co/zVpsyMpH/x.png"
+             id="hero-char-img"
+             crossorigin="anonymous"
+             alt="Elon Chicken"
+             style="width:160px;height:160px;object-fit:contain;display:block;filter:drop-shadow(0 8px 32px rgba(245,200,66,0.6));"
+        />
         <div class="chicken-glow"></div>
         <div class="chicken-shadow"></div>
       </div>
@@ -1463,6 +1452,28 @@ body{background:transparent}
     <span class="speed-arrow">&raquo;</span>
   </div>
   <div class="powerup-row" id="powerup-row"></div>
+  <!-- JUMP BUTTON -->
+  <button id="btn-jump" style="
+    position:absolute;
+    bottom:24px;
+    right:20px;
+    width:72px;
+    height:72px;
+    border-radius:50%;
+    background:linear-gradient(135deg,#f5c842,#f97316);
+    border:3px solid rgba(255,255,255,0.35);
+    box-shadow:0 4px 24px rgba(245,200,66,0.55),0 2px 8px rgba(0,0,0,0.4);
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.7rem;
+    color:#09090f;
+    font-weight:900;
+    pointer-events:all;
+    z-index:30;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+    touch-action:manipulation;
+  ">&#x2B06;</button>
   <div class="game-popup" id="game-popup"></div>
   <div id="pause-modal" class="overlay-modal hidden">
     <div class="modal-glass">
@@ -3874,7 +3885,6 @@ const GameEngine = (() => {
   let _swipeStartY = 0;
 
   function _bindInput() {
-    // Remove ALL previous listeners cleanly
     if (_docTouchStart) {
       document.removeEventListener('touchstart', _docTouchStart);
       document.removeEventListener('touchend',   _docTouchEnd);
@@ -3882,51 +3892,54 @@ const GameEngine = (() => {
     document.removeEventListener('keydown', _onKey);
     document.removeEventListener('keyup',   _onKeyUp);
 
+    // Swipe-down = duck only. Jump handled by button.
     _docTouchStart = function(e) {
       if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
       _swipeStartY = e.touches[0].clientY;
-      if (_state !== 'running') return;
-      try { e.preventDefault(); } catch(x) {}
-      _jump();
     };
-
     _docTouchEnd = function(e) {
       if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
       if (_state !== 'running') return;
-      try { e.preventDefault(); } catch(x) {}
       const dy = e.changedTouches[0].clientY - _swipeStartY;
-      if (dy > 40) { _duck(true); setTimeout(function(){_duck(false);},500); }
+      if (dy > 40) { _duck(true); setTimeout(function(){ _duck(false); }, 500); }
     };
 
-    // ONLY document — single listener, no duplicates
-    document.addEventListener('touchstart', _docTouchStart, { passive: false });
-    document.addEventListener('touchend',   _docTouchEnd,   { passive: false });
+    document.addEventListener('touchstart', _docTouchStart, { passive: true });
+    document.addEventListener('touchend',   _docTouchEnd,   { passive: true });
     document.addEventListener('keydown', _onKey);
     document.addEventListener('keyup',   _onKeyUp);
+
+    // Jump button — wire up here so it is always fresh
+    const jumpBtn = document.getElementById('btn-jump');
+    if (jumpBtn) {
+      jumpBtn.ontouchstart = function(e) {
+        e.stopPropagation();
+        if (_state !== 'running') return;
+        _jump();
+      };
+      jumpBtn.onclick = function() {
+        if (_state !== 'running') return;
+        _jump();
+      };
+    }
   }
 
   function _onKey(e) {
     if (_state !== 'running') return;
     if (e.code === 'Space' || e.code === 'ArrowUp') _jump();
-    if (e.code === 'ArrowDown') { _duck(true); setTimeout(function(){_duck(false);}, 500); }
+    if (e.code === 'ArrowDown') { _duck(true); setTimeout(function(){ _duck(false); }, 500); }
   }
   function _onKeyUp(e) {}
 
   function _jump() {
-    // Spec: if not grounded → no jump
     if (!_runner.grounded) return;
-    // Spec: no jump while ducking
-    if (_runner.ducking) return;
-    // JUMP
     _runner.vy       = JUMP_VEL;
     _runner.grounded = false;
     _runner.jumping  = true;
-    _runner.ducking  = false;
     Audio2.sfxJump();
   }
 
   function _duck(active) {
-    // Spec: no duck while jumping
     if (!_runner.grounded && active) return;
     _runner.ducking = (active === true);
   }
