@@ -1378,8 +1378,8 @@ body{background:transparent}
 
     <div class="home-hero-area">
       <div class="hero-chicken" id="hero-chicken">
-        <img src="https://i.ibb.co/zVpsyMpH/x.png" class="hero-char-img" id="hero-char-img" alt="chicken" crossorigin="anonymous" style="width:130px;height:auto;object-fit:contain;display:block" onload="this.style.display='block';var f=document.getElementById('hero-fallback');if(f)f.style.display='none';" onerror="this.style.display='none';var f=document.getElementById('hero-fallback');if(f)f.style.display='block';">
-        <svg id="hero-fallback" viewBox="0 0 100 140" width="130" height="182" style="display:block;filter:drop-shadow(0 8px 24px rgba(245,200,66,0.4))">
+        <img src="https://i.ibb.co/zVpsyMpH/x.png" id="hero-char-img" class="hero-char-img" crossorigin="anonymous" style="width:130px;height:130px;object-fit:contain;display:block;" alt="chicken">
+        <svg id="hero-fallback" viewBox="0 0 100 140" width="130" height="182" style="display:none;filter:drop-shadow(0 8px 24px rgba(245,200,66,0.4))">
           <ellipse cx="50" cy="95" rx="32" ry="40" fill="#c8a060" stroke="rgba(0,0,0,0.2)" stroke-width="1.5"/>
           <ellipse cx="56" cy="85" rx="20" ry="12" fill="#f5c842" opacity="0.6"/>
           <path d="M16 88 L2 78 L8 70 L20 80Z" fill="#f5c842"/>
@@ -3249,22 +3249,22 @@ const GameEngine = (() => {
   }
 
   function _updateRunner(dt) {
-    // Apply gravity always (spec: velocityY += gravity each frame)
-    _runner.vy += GRAVITY * dt;
-    // Apply velocity
-    _runner.y  += _runner.vy * dt;
-    // Landing — ONLY when moving downward (velocityY > 0) per spec
     const targetH = _runner.ducking ? _runner.h * DUCK_H : _runner.h;
     const groundY = _groundY - targetH;
-    if (_runner.y >= groundY && _runner.vy > 0) {
-      _runner.y        = groundY;
-      _runner.vy       = 0;
-      _runner.grounded = true;
-      _runner.jumping  = false;
-      _runner.doubleJumped = false;
+    if (_runner.grounded) {
+      _runner.y  = groundY;
+      _runner.vy = 0;
+    } else {
+      _runner.vy += GRAVITY * dt;
+      _runner.y  += _runner.vy * dt;
+      if (_runner.y >= groundY && _runner.vy > 0) {
+        _runner.y        = groundY;
+        _runner.vy       = 0;
+        _runner.grounded = true;
+        _runner.jumping  = false;
+        _runner.doubleJumped = false;
+      }
     }
-    // Clamp — never go above canvas top
-    if (_runner.y < -_runner.h) { _runner.y = -_runner.h; _runner.vy = 0; }
   }
 
   // ─────────────────────────────────────────────
@@ -3883,10 +3883,11 @@ const GameEngine = (() => {
     document.removeEventListener('keyup',   _onKeyUp);
 
     _docTouchStart = function(e) {
-      // Let buttons handle themselves
       if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
       _swipeStartY = e.touches[0].clientY;
+      if (_state !== 'running') return;
       try { e.preventDefault(); } catch(x) {}
+      _jump();
     };
 
     _docTouchEnd = function(e) {
@@ -3894,17 +3895,7 @@ const GameEngine = (() => {
       if (_state !== 'running') return;
       try { e.preventDefault(); } catch(x) {}
       const dy = e.changedTouches[0].clientY - _swipeStartY;
-      if (dy < -10) {
-        // Swipe UP → jump
-        _jump();
-      } else if (dy > 30) {
-        // Swipe DOWN → duck
-        _duck(true);
-        setTimeout(function() { _duck(false); }, 500);
-      } else {
-        // Tap → also jump
-        _jump();
-      }
+      if (dy > 40) { _duck(true); setTimeout(function(){_duck(false);},500); }
     };
 
     // ONLY document — single listener, no duplicates
