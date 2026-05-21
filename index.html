@@ -52,7 +52,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
   font-family:var(--f-body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
-  touch-action:none;overscroll-behavior:none;position:fixed;}
+  touch-action:none;overscroll-behavior:none;}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;-webkit-tap-highlight-color:transparent}
 input{font-family:inherit;background:none;border:none;color:inherit;outline:none}
 img{display:block;max-width:100%}
@@ -2936,118 +2936,86 @@ window.HomeScreen = HomeScreen;
    ══════════════════════════════════════════════════ */
 
 const GameEngine = (() => {
-  // ── Canvas & context
-  let _cv = null, _ctx = null;
-  let _W = 0, _H = 0;
+  'use strict';
 
-  // ── Game state
+  // ── Canvas & context ────────────────────────────────────────────────────
+  let _cv = null, _ctx = null;
+  let _W  = 0,    _H   = 0;
+
+  // ── State ────────────────────────────────────────────────────────────────
   let _state    = 'idle'; // idle | running | paused | dead
   let _raf      = null;
   let _lastTime = 0;
 
-  // ── Player
-  let _player = null;
-  let _char   = null;
-  let _charImg = null; // PNG sprite if available
+  // ── Player data ──────────────────────────────────────────────────────────
+  let _player  = null;
+  let _char    = null;
+  let _charImg = null;
 
-  // ── Physics
-  const GROUND_H = 0.72; // fraction of canvas height
-  let _groundY   = 0;
-  // Pixel-based physics (scaled by dt for frame-rate independence)
-  // gravity=0.8px/frame @ 60fps = 0.8*60=48px/s per frame → *60 = 2880px/s²
-  // jumpForce=-18px/frame @ 60fps = -18*60=1080px/s
-  const GRAVITY   = 2880; // px/s² (0.8 * 60fps * 60)
-  const JUMP_VEL  = -1080; // px/s (-18 * 60fps)
-  const DUCK_H    = 0.55; // fraction of normal height
+  // ── Physics constants ────────────────────────────────────────────────────
+  const GROUND_FRAC = 0.72;   // groundY = H * GROUND_FRAC
+  const GRAVITY     = 2800;   // px/s²
+  const JUMP_VEL    = -1050;  // px/s  (negative = up)
+  const DUCK_SCALE  = 0.55;   // duck height multiplier
 
-  // ── Runner object
-  let _runner = {
-    x: 0, y: 0,
-    vy: 0,
-    w: 60, h: 90,
-    grounded: true,
-    jumping: false,
-    doubleJumped: false,
-    ducking: false,
-    invincible: false,
-    invincibleTimer: 0,
-    blinkTimer: 0,
+  let _groundY = 0;
+
+  // ── Runner ────────────────────────────────────────────────────────────────
+  const _runner = {
+    x:0, y:0, w:60, h:90,
+    vy:0,
+    grounded:true, jumping:false, doubleJumped:false,
+    ducking:false,
+    invincible:false, invincibleTimer:0, blinkTimer:0,
   };
 
-  // ── Score / currency
-  let _score    = 0;
-  let _coins    = 0;
-  let _distance = 0;
-  let _lives    = 2;
-  let _combo    = 1;
-  let _comboTimer = 0;
+  // ── Scores ────────────────────────────────────────────────────────────────
+  let _score=0, _coins=0, _distance=0, _lives=2, _combo=1, _comboTimer=0;
 
-  // ── Speed
-  let _speed     = 260; // px/s starting
-  const SPEED_MAX = 750;
-  const SPEED_INC = 6;   // per second — ramps faster
+  // ── Speed ─────────────────────────────────────────────────────────────────
+  let _speed = 260;
+  const SPEED_MAX = 750, SPEED_INC = 6;
 
-  // ── Environment
-  let _envIndex  = 0;
-  let _envBgImg  = null;
-  let _bgImages  = {};
-  let _bgLoaded  = {};
+  // ── World ─────────────────────────────────────────────────────────────────
+  let _envIndex=0, _envBgImg=null, _bgImages={}, _bgLoaded={};
+  let _obstacles=[], _coinItems=[], _puItems=[], _powerups=[];
+  let _obstTimer=0, _obstInterval=1.8, _coinTimer=0;
+  let _layers=[];
 
-  // ── Obstacles & coins
-  let _obstacles = [];
-  let _coinItems = [];
-  let _obstTimer = 0;
-  let _obstInterval = 1.8; // seconds
-  let _coinTimer = 0;
+  // ── Security ──────────────────────────────────────────────────────────────
+  let _secSession=null, _lastValidation=0;
+  let _deltaCoinsSinceVal=0, _deltaScoreSinceVal=0, _deltaDistSinceVal=0;
 
-  // ── Powerups
-  let _powerups  = []; // active powerup effects
-  let _puItems   = []; // spawned on track
-
-  // ── Layers (parallax)
-  let _layers = [];
-
-  // ── Session (anti-cheat)
-  let _secSession = null;
-  let _lastValidation = 0;
-  let _deltaCoinsSinceVal = 0;
-  let _deltaScoreSinceVal = 0;
-  let _deltaDistSinceVal  = 0;
-
-  // ── HUD elements (cached)
+  // ── HUD refs ──────────────────────────────────────────────────────────────
   let _hudDist, _hudScore, _hudCoins, _hudCombo, _comboVal,
       _speedFill, _powerupRow, _gamePopup;
 
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   //  PUBLIC: start
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   function start(playerData) {
     _player = playerData;
-    _cv  = document.getElementById('game-canvas');
-    _ctx = _cv.getContext('2d');
-    // Polyfill roundRect for Telegram WebView (Chrome < 99)
+    _cv     = document.getElementById('game-canvas');
+    _ctx    = _cv.getContext('2d');
+
+    // Polyfill roundRect for older Telegram WebView
     if (!_ctx.roundRect) {
-      _ctx.roundRect = function(x, y, w, h, r) {
-        if (typeof r === 'number') r = [r];
-        const [tl=0, tr=tl, br=tl, bl=tr] = r;
+      _ctx.roundRect = function(x,y,w,h,r) {
+        if (typeof r==='number') r=[r];
+        const [tl=0,tr=tl,br=tl,bl=tr]=r;
         this.beginPath();
-        this.moveTo(x + tl, y);
-        this.lineTo(x + w - tr, y);
-        this.arcTo(x + w, y, x + w, y + tr, tr);
-        this.lineTo(x + w, y + h - br);
-        this.arcTo(x + w, y + h, x + w - br, y + h, br);
-        this.lineTo(x + bl, y + h);
-        this.arcTo(x, y + h, x, y + h - bl, bl);
-        this.lineTo(x, y + tl);
-        this.arcTo(x, y, x + tl, y, tl);
-        this.closePath();
-        return this;
+        this.moveTo(x+tl,y); this.lineTo(x+w-tr,y);
+        this.arcTo(x+w,y,x+w,y+tr,tr); this.lineTo(x+w,y+h-br);
+        this.arcTo(x+w,y+h,x+w-br,y+h,br); this.lineTo(x+bl,y+h);
+        this.arcTo(x,y+h,x,y+h-bl,bl); this.lineTo(x,y+tl);
+        this.arcTo(x,y,x+tl,y,tl); this.closePath(); return this;
       };
     }
+
     _resize();
     window.addEventListener('resize', _resize);
 
-    // Cache HUD
+    // Cache HUD elements
     _hudDist    = document.getElementById('hud-distance');
     _hudScore   = document.getElementById('hud-score');
     _hudCoins   = document.getElementById('hud-coins');
@@ -3059,97 +3027,95 @@ const GameEngine = (() => {
 
     // Character
     const charId = _player?.equipped_character || 'guardian';
-    _char = window.ECHICK_CONFIG.CHARACTERS.find(c => c.id === charId)
+    _char = window.ECHICK_CONFIG.CHARACTERS.find(c=>c.id===charId)
           || window.ECHICK_CONFIG.CHARACTERS[0];
     _tryLoadCharSprite();
 
-    // Choose random environment
+    // Environment
     _envIndex = Math.floor(Math.random() * window.ECHICK_CONFIG.ENVIRONMENTS.length);
     _preloadEnvImages();
 
-    // Reset state
     _reset();
-
-    // Start security session
     _secSession = Security.startSession();
-
-    // Touch / keyboard
     _bindInput();
 
-    // Pause / resume buttons
-    const _pauseBtn  = document.getElementById('btn-pause');
-    const _resumeBtn = document.getElementById('btn-resume');
-    const _quitBtn   = document.getElementById('btn-quit');
-    _pauseBtn.onclick    = pause;
-    _resumeBtn.onclick   = resume;
-    _quitBtn.onclick     = () => { _quit(); };
-    _pauseBtn.ontouchend  = (e) => { e.preventDefault(); pause(); };
-    _resumeBtn.ontouchend = (e) => { e.preventDefault(); resume(); };
-    _quitBtn.ontouchend   = (e) => { e.preventDefault(); _quit(); };
-    const _replayBtn = document.getElementById('btn-replay');
-    const _homeBtn   = document.getElementById('btn-go-home');
-    _replayBtn.onclick   = () => { _hideGameOver(); start(playerData); };
-    _homeBtn.onclick     = () => { _hideGameOver(); App.navigateTo('home'); };
-    _replayBtn.ontouchend = (e) => { e.preventDefault(); _hideGameOver(); start(playerData); };
-    _homeBtn.ontouchend   = (e) => { e.preventDefault(); _hideGameOver(); App.navigateTo('home'); };
+    // Button wiring
+    _wire('btn-pause',    'ontouchend', e=>{e.preventDefault();pause();});
+    _wire('btn-pause',    'onclick',    pause);
+    _wire('btn-resume',   'ontouchend', e=>{e.preventDefault();resume();});
+    _wire('btn-resume',   'onclick',    resume);
+    _wire('btn-quit',     'ontouchend', e=>{e.preventDefault();_quit();});
+    _wire('btn-quit',     'onclick',    _quit);
+    _wire('btn-replay',   'ontouchend', e=>{e.preventDefault();_hideGameOver();start(playerData);});
+    _wire('btn-replay',   'onclick',    ()=>{_hideGameOver();start(playerData);});
+    _wire('btn-go-home',  'ontouchend', e=>{e.preventDefault();_hideGameOver();App.navigateTo('home');});
+    _wire('btn-go-home',  'onclick',    ()=>{_hideGameOver();App.navigateTo('home');});
 
-    _state = 'running';
+    _state    = 'running';
     _lastTime = performance.now();
     cancelAnimationFrame(_raf);
     _raf = requestAnimationFrame(_loop);
 
-    try { Audio2.resume(); } catch(e){}
+    try { Audio2.resume(); } catch(e) {}
     Audio2.playBg();
   }
 
-  // ─────────────────────────────────────────────
-  //  Reset all game vars
-  // ─────────────────────────────────────────────
-  function _reset() {
-    _groundY  = _H * GROUND_H;
-    _score    = 0; _coins = 0; _distance = 0;
-    _combo    = 1; _comboTimer = 0;
-    _speed    = 260;
-    _obstacles = []; _coinItems = []; _puItems = [];
-    _powerups  = [];
-    _obstTimer = 0; _coinTimer = 0;
-    _deltaCoinsSinceVal = 0; _deltaScoreSinceVal = 0; _deltaDistSinceVal = 0;
-    _lastValidation = performance.now();
-
-    _runner.x         = _W * 0.18;
-    _runner.y         = _groundY - _runner.h;
-    _runner.vy        = 0;
-    _runner.grounded  = true;
-    _runner.jumping   = false;
-    _runner.doubleJumped = false;
-    _runner.ducking   = false;
-    _runner.invincible = false;
-    _runner.invincibleTimer = 0;
-    _touchActive = false;
-    _lives = 2;
-    _updateLivesHUD();
-
-    _buildLayers();
-    _powerupRow.innerHTML = '';
-    _gamePopup.innerHTML  = '';
-    document.getElementById('hud-combo').classList.add('hidden');
+  function _wire(id, ev, fn) {
+    const el = document.getElementById(id);
+    if (el) el[ev] = fn;
   }
 
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Resize — sets canvas to full window, recalculates groundY
+  // ─────────────────────────────────────────────────────────────────────────
+  function _resize() {
+    if (!_cv) return;
+    // Use the screen-game div dimensions if available, else window
+    const el = document.getElementById('screen-game');
+    _W = _cv.width  = el ? el.clientWidth  || window.innerWidth  : window.innerWidth;
+    _H = _cv.height = el ? el.clientHeight || window.innerHeight : window.innerHeight;
+    _groundY = _H * GROUND_FRAC;
+    if (_state === 'running' || _state === 'paused') {
+      _runner.x = _W * 0.18;
+      // Reposition to correct ground if grounded
+      if (_runner.grounded) _runner.y = _groundY - (_runner.ducking ? _runner.h*DUCK_SCALE : _runner.h);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Reset
+  // ─────────────────────────────────────────────────────────────────────────
+  function _reset() {
+    _groundY   = _H * GROUND_FRAC;
+    _score=0; _coins=0; _distance=0; _combo=1; _comboTimer=0; _speed=260;
+    _obstacles=[]; _coinItems=[]; _puItems=[]; _powerups=[];
+    _obstTimer=0; _coinTimer=0;
+    _deltaCoinsSinceVal=0; _deltaScoreSinceVal=0; _deltaDistSinceVal=0;
+    _lastValidation = performance.now();
+
+    _runner.x=_W*0.18; _runner.y=_groundY-_runner.h;
+    _runner.vy=0; _runner.grounded=true; _runner.jumping=false;
+    _runner.doubleJumped=false; _runner.ducking=false;
+    _runner.invincible=false; _runner.invincibleTimer=0; _runner.blinkTimer=0;
+    _lives=2; _updateLivesHUD();
+
+    _buildLayers();
+    if (_powerupRow) _powerupRow.innerHTML='';
+    if (_gamePopup)  _gamePopup.innerHTML='';
+    document.getElementById('hud-combo')?.classList.add('hidden');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   //  Main loop
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   function _loop(now) {
     if (_state !== 'running') return;
     _raf = requestAnimationFrame(_loop);
-
     const dt = Math.min((now - _lastTime) / 1000, 0.05);
     _lastTime = now;
-
     _update(dt);
-    try { _draw(); } catch(e) { console.warn('draw err:', e); }
+    _draw();
     _updateHUD();
-
-    // Anti-cheat periodic check every 3 seconds
     if (now - _lastValidation > 3000) {
       Security.validateTick(_deltaCoinsSinceVal, _deltaScoreSinceVal, _deltaDistSinceVal);
       _deltaCoinsSinceVal = _deltaScoreSinceVal = _deltaDistSinceVal = 0;
@@ -3157,122 +3123,108 @@ const GameEngine = (() => {
     }
   }
 
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   //  Update
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   function _update(dt) {
-    // Speed ramp
     if (_speed < SPEED_MAX) _speed += SPEED_INC * dt;
 
-    // Distance
-    const distDelta = _speed * dt / 10;
-    _distance += distDelta;
-    _deltaDistSinceVal += distDelta;
+    const distDelta  = _speed * dt / 10;
+    _distance += distDelta; _deltaDistSinceVal += distDelta;
 
-    // Score
     const scoreDelta = Math.floor(_speed * dt * 0.5 * _combo);
-    _score += scoreDelta;
-    _deltaScoreSinceVal += scoreDelta;
+    _score += scoreDelta; _deltaScoreSinceVal += scoreDelta;
 
-    // Combo decay
     if (_combo > 1) {
       _comboTimer -= dt;
-      if (_comboTimer <= 0) { _combo = 1; _comboTimer = 0; document.getElementById('hud-combo').classList.add('hidden'); }
+      if (_comboTimer <= 0) { _combo=1; _comboTimer=0; document.getElementById('hud-combo')?.classList.add('hidden'); }
     }
 
-    // Runner physics
     _updateRunner(dt);
 
-    // Layers
     _layers.forEach(l => { l.x -= l.speed * _speed * dt; if (l.x < -l.w) l.x = _W; });
 
-    // Spawn obstacles
     _obstTimer -= dt;
     if (_obstTimer <= 0) {
       _spawnObstacle();
-      _obstInterval = Math.max(0.6, 1.8 - _distance / 5000);
-      _obstTimer = _obstInterval + (Math.random() * 0.4 - 0.2);
+      _obstInterval = Math.max(0.6, 1.8 - _distance/5000);
+      _obstTimer = _obstInterval + (Math.random()*0.4-0.2);
     }
 
-    // Spawn coins
     _coinTimer -= dt;
-    if (_coinTimer <= 0) {
-      _spawnCoinRow();
-      _coinTimer = 0.6 + Math.random() * 0.5;
-    }
+    if (_coinTimer <= 0) { _spawnCoinRow(); _coinTimer = 0.6+Math.random()*0.5; }
 
     // Move obstacles
     _obstacles = _obstacles.filter(o => {
       o.x -= _speed * dt;
-      return o.x > -200;
+      return o.x > -120;
     });
 
     // Move coins
     _coinItems = _coinItems.filter(c => {
       c.x -= _speed * dt;
-      if (!c.collected && _collides(_runner, c)) {
-        _collectCoin(c);
-        return false;
-      }
-      return c.x > -100;
+      if (c.collected) { c.vy -= 400*dt; c.y += c.vy*dt; c.alpha -= 2*dt; return c.alpha > 0; }
+      return c.x > -40;
     });
 
     // Move powerup items
+    _puItems = _puItems.filter(p => { p.x -= _speed*dt; return p.x > -60; });
+
+    // Collisions — obstacles
+    _obstacles.forEach(o => {
+      if (!_collides(_runner, o)) return;
+      if (_hasPowerup('shield')) {
+        _removePowerup('shield');
+        _runner.invincible=true; _runner.invincibleTimer=1.5;
+        _showPopup('🛡️ Shield!');
+      } else { _die(); }
+    });
+
+    // Collisions — coins
+    _coinItems.forEach(c => {
+      if (c.collected) return;
+      if (!_collides(_runner, {x:c.x-14,y:c.y-14,w:28,h:28})) return;
+      c.collected=true; c.vy=-200; c.alpha=1;
+      _coins++; _deltaCoinsSinceVal++;
+      _combo = Math.min(_combo+0.1, 5);
+      _comboTimer = 2.5;
+      document.getElementById('hud-combo')?.classList.remove('hidden');
+      try { Audio2.sfxCoin(); } catch(e) {}
+    });
+
+    // Collisions — powerup items
     _puItems = _puItems.filter(p => {
-      p.x -= _speed * dt;
-      if (!p.collected && _collides(_runner, p)) {
-        _activatePowerup(p);
-        return false;
-      }
-      return p.x > -100;
+      if (!_collides(_runner, {x:p.x-20,y:p.y-20,w:40,h:40})) return true;
+      _activatePowerup(p.puId);
+      return false;
     });
 
-    // Powerup timers
-    _powerups = _powerups.filter(p => {
-      p.timeLeft -= dt;
-      if (p.timeLeft <= 0) { _deactivatePowerup(p); return false; }
-      return true;
+    // Active powerup timers
+    _powerups = _powerups.filter(pu => {
+      pu.timer -= dt;
+      return pu.timer > 0;
     });
 
-    // Obstacle collision
-    if (!_runner.invincible) {
-      for (const o of _obstacles) {
-        if (_collides(_runner, o)) {
-          if (_hasPowerup('shield')) {
-            _removePowerup('shield');
-            _runner.invincible = true; _runner.invincibleTimer = 1.5;
-            _showPopup('🛡️ Shield!');
-          } else {
-            _die(); return;
-          }
-        }
-      }
-    }
-
-    // Invincibility timer
+    // Invincibility
     if (_runner.invincible) {
-      _runner.invincibleTimer -= dt;
-      _runner.blinkTimer += dt;
-      if (_runner.invincibleTimer <= 0) { _runner.invincible = false; _runner.blinkTimer = 0; }
+      _runner.invincibleTimer -= dt; _runner.blinkTimer += dt;
+      if (_runner.invincibleTimer <= 0) { _runner.invincible=false; _runner.blinkTimer=0; }
     }
 
-    // Spawn powerup item occasionally
     if (Math.random() < 0.003) _spawnPowerupItem();
   }
 
+  // ── PHYSICS — one authoritative loop, no conflicts ───────────────────────
   function _updateRunner(dt) {
-    // ── Single authoritative physics loop ────────────────────────────────
-    // Gravity applies every frame unconditionally
+    // Gravity always runs — grounded state is a RESULT, not an input
     _runner.vy += GRAVITY * dt;
     _runner.y  += _runner.vy * dt;
 
-    // Effective height changes when ducking
-    const targetH  = _runner.ducking ? _runner.h * DUCK_H : _runner.h;
-    const groundFloor = _groundY - targetH;
+    const effH      = _runner.ducking ? _runner.h * DUCK_SCALE : _runner.h;
+    const floorY    = _groundY - effH;
 
-    // Landing detection: position-based, not flag-based
-    if (_runner.y >= groundFloor) {
-      _runner.y            = groundFloor;
+    if (_runner.y >= floorY) {
+      _runner.y            = floorY;
       _runner.vy           = 0;
       _runner.grounded     = true;
       _runner.jumping      = false;
@@ -3282,807 +3234,512 @@ const GameEngine = (() => {
     }
   }
 
-  // ─────────────────────────────────────────────
-  //  Draw
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Draw — uses _runner.y directly, NEVER hardcoded groundY
+  // ─────────────────────────────────────────────────────────────────────────
   function _draw() {
-    if (!_ctx) return;
+    if (!_ctx || !_W || !_H) return;
     _ctx.clearRect(0, 0, _W, _H);
-
-    // Background
     _drawBackground();
-
-    // Ground
     _drawGround();
-
-    // Coin items
     _coinItems.forEach(c => _drawCoin(c));
-
-    // Powerup items on track
     _puItems.forEach(p => _drawPuItem(p));
-
-    // Obstacles
     _obstacles.forEach(o => _drawObstacle(o));
-
-    // Runner
     _drawRunner();
-
-    // Particles / effects
-    _drawEffects();
   }
 
   function _drawBackground() {
     const env = window.ECHICK_CONFIG.ENVIRONMENTS[_envIndex] || window.ECHICK_CONFIG.ENVIRONMENTS[0];
-    // Sky gradient
-    const sky = _ctx.createLinearGradient(0, 0, 0, _H * GROUND_H);
+    const sky = _ctx.createLinearGradient(0, 0, 0, _groundY);
     const cols = env.sky.split(',');
-    cols.forEach(function(col, i) { sky.addColorStop(i / Math.max(cols.length-1,1), col.trim()); });
+    cols.forEach((col,i) => sky.addColorStop(i/Math.max(cols.length-1,1), col.trim()));
     _ctx.fillStyle = sky;
-    _ctx.fillRect(0, 0, _W, _H * GROUND_H + 2);
-    // Simple sun
+    _ctx.fillRect(0, 0, _W, _groundY+2);
+    // Sun/moon
     _ctx.fillStyle = 'rgba(255,220,100,0.85)';
-    _ctx.beginPath(); _ctx.arc(_W*0.75, _H*0.15, 28, 0, Math.PI*2); _ctx.fill();
-  }
-
-  function _drawSkyElements(env) {
-    if (env.id === 'miami') {
-      // Sun
-      const sg = _ctx.createRadialGradient(_W * 0.5, _H * 0.3, 0, _W * 0.5, _H * 0.3, 60);
-      sg.addColorStop(0,'rgba(255,220,80,0.9)');
-      sg.addColorStop(0.5,'rgba(255,140,60,0.5)');
-      sg.addColorStop(1,'transparent');
-      _ctx.fillStyle = sg; _ctx.beginPath();
-      _ctx.arc(_W * 0.5, _H * 0.3, 60, 0, Math.PI * 2); _ctx.fill();
-    } else if (env.id === 'tokyo') {
-      // Moon
-      _ctx.fillStyle = 'rgba(200,220,255,0.85)';
-      _ctx.beginPath(); _ctx.arc(_W * 0.8, _H * 0.15, 28, 0, Math.PI * 2); _ctx.fill();
-    } else if (env.id === 'space') {
-      // Stars
-      for (let i = 0; i < 80; i++) {
-        const sx = (i * 173 + 50) % _W;
-        const sy = (i * 97 + 20) % (_H * 0.65);
-        _ctx.fillStyle = `rgba(255,255,255,${0.3 + (i % 3) * 0.2})`;
-        _ctx.beginPath(); _ctx.arc(sx, sy, 0.8 + (i%3)*0.6, 0, Math.PI*2); _ctx.fill();
-      }
-    }
+    _ctx.beginPath(); _ctx.arc(_W*0.75, _H*0.14, 26, 0, Math.PI*2); _ctx.fill();
+    // Parallax layers
+    _layers.forEach(l => {
+      _ctx.save();
+      _ctx.globalAlpha = l.alpha;
+      _ctx.fillStyle   = l.color;
+      if (l.shapes) l.shapes.forEach(s => {
+        _ctx.fillRect(l.x + s.x, s.y, s.w, s.h);
+        _ctx.fillRect(l.x + s.x - l.w, s.y, s.w, s.h);
+        _ctx.fillRect(l.x + s.x + l.w, s.y, s.w, s.h);
+      });
+      _ctx.restore();
+    });
   }
 
   function _drawGround() {
-    // Road
     _ctx.fillStyle = '#1e1e2e';
     _ctx.fillRect(0, _groundY, _W, _H - _groundY);
-    // Ground line
-    _ctx.strokeStyle = '#f5c842';
-    _ctx.lineWidth = 2;
-    _ctx.beginPath(); _ctx.moveTo(0, _groundY); _ctx.lineTo(_W, _groundY); _ctx.stroke();
-    // Center dashes
-    _ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    _ctx.lineWidth = 3;
-    const dashW = 40, gapW = 30, y2 = _groundY + (_H-_groundY)*0.5;
-    const offset = (_distance * 10) % (dashW + gapW);
-    for (let x = -offset; x < _W + dashW; x += dashW + gapW) {
-      _ctx.beginPath(); _ctx.moveTo(x, y2); _ctx.lineTo(x+dashW, y2); _ctx.stroke();
+    _ctx.strokeStyle = '#f5c842'; _ctx.lineWidth = 2;
+    _ctx.beginPath(); _ctx.moveTo(0,_groundY); _ctx.lineTo(_W,_groundY); _ctx.stroke();
+    // Animated dashes
+    const dashW=40, gapW=30, y2=_groundY+(_H-_groundY)*0.45;
+    const off = (_distance*10) % (dashW+gapW);
+    _ctx.strokeStyle='rgba(255,255,255,0.18)'; _ctx.lineWidth=3;
+    for (let x=-off; x<_W+dashW; x+=dashW+gapW) {
+      _ctx.beginPath(); _ctx.moveTo(x,y2); _ctx.lineTo(x+dashW,y2); _ctx.stroke();
     }
+  }
+
+  // ── Runner draw — uses _runner.y, the ACTUAL physics position ────────────
+  function _drawRunner() {
+    const r  = _runner;
+    const dh = r.ducking ? r.h * DUCK_SCALE : r.h;
+    const ry = r.y;  // ← physics y, NOT groundY - dh
+
+    if (r.invincible && Math.floor(r.blinkTimer*10)%2===0) return;
+
+    if (_hasPowerup('shield')) {
+      _ctx.strokeStyle='rgba(167,139,250,0.55)'; _ctx.lineWidth=3;
+      _ctx.beginPath(); _ctx.ellipse(r.x+r.w/2, ry+dh/2, 46, 52, 0, 0, Math.PI*2); _ctx.stroke();
+    }
+
+    _ctx.save();
+    if (r.ducking) {
+      _ctx.translate(r.x+r.w/2, _groundY);
+      _ctx.scale(1, DUCK_SCALE);
+      _ctx.translate(-(r.x+r.w/2), -_groundY);
+    }
+    if (_charImg && _charImg.complete && _charImg.naturalWidth > 0) {
+      _ctx.translate(r.x+r.w/2, ry+dh/2);
+      _ctx.rotate(0.04);
+      _ctx.drawImage(_charImg, -r.w/2, -dh/2, r.w, dh);
+    } else {
+      _drawChickenShape(r.x+r.w/2, ry+dh/2, r.w, dh, _char ? _char.id : 'guardian');
+    }
+    _ctx.restore();
   }
 
   function _drawChickenShape(cx, cy, w, h, charId) {
     const ctx = _ctx;
-    const colors = {
+    const palette = {
       guardian:{ body:'#e0e0f0', acc:'#60a5fa' },
       magnet:  { body:'#8B5E3C', acc:'#ef4444' },
       jumper:  { body:'#c8a060', acc:'#a855f7' },
       speed:   { body:'#d4a853', acc:'#f59e0b' },
       royal:   { body:'#d4af37', acc:'#f5c842' },
     };
-    const col = colors[charId] || { body:'#c8a060', acc:'#f5c842' };
-    const bw = w*0.5, bh = h*0.4;
-    ctx.save();
-    ctx.translate(cx, cy);
+    const col = palette[charId] || { body:'#c8a060', acc:'#f5c842' };
+    const bw=w*0.5, bh=h*0.4;
+    ctx.save(); ctx.translate(cx,cy);
     // Glow
-    ctx.fillStyle = col.acc.replace(')', ',0.25)').replace('rgb','rgba');
-    ctx.beginPath(); ctx.ellipse(0, 0, bw*1.3, bh*1.3, 0, 0, Math.PI*2); ctx.fill();
+    const gc = col.acc;
+    ctx.fillStyle = gc+'44';
+    ctx.beginPath(); ctx.ellipse(0,0,bw*1.3,bh*1.3,0,0,Math.PI*2); ctx.fill();
     // Body
-    ctx.fillStyle = col.body;
-    ctx.beginPath(); ctx.ellipse(0, 0, bw, bh, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle=col.body;
+    ctx.beginPath(); ctx.ellipse(0,0,bw,bh,0,0,Math.PI*2); ctx.fill();
     // Wing
-    ctx.fillStyle = col.acc;
-    ctx.beginPath(); ctx.ellipse(bw*0.25, 0, bw*0.35, bh*0.25, 0, 0, Math.PI*2); ctx.fill();
-    // Tail
-    ctx.fillStyle = col.acc;
-    ctx.beginPath(); ctx.moveTo(-bw*0.8,-bh*0.1); ctx.lineTo(-bw*1.3,-bh*0.5); ctx.lineTo(-bw*0.6,-bh*0.2); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(-bw*0.8, bh*0.1); ctx.lineTo(-bw*1.3, bh*0.5); ctx.lineTo(-bw*0.6, bh*0.2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=col.acc;
+    ctx.beginPath(); ctx.ellipse(bw*0.25,0,bw*0.35,bh*0.25,0,0,Math.PI*2); ctx.fill();
+    // Tail feathers
+    ctx.fillStyle=col.acc;
+    ctx.beginPath(); ctx.moveTo(-bw*.8,-bh*.1); ctx.lineTo(-bw*1.3,-bh*.5); ctx.lineTo(-bw*.6,-bh*.2); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-bw*.8, bh*.1); ctx.lineTo(-bw*1.3, bh*.5); ctx.lineTo(-bw*.6, bh*.2); ctx.closePath(); ctx.fill();
     // Head
-    const hx = bw*0.65, hy = -bh*0.6, hr = h*0.17;
-    ctx.fillStyle = col.body;
-    ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI*2); ctx.fill();
+    const hx=bw*.65, hy=-bh*.6, hr=h*.17;
+    ctx.fillStyle=col.body;
+    ctx.beginPath(); ctx.arc(hx,hy,hr,0,Math.PI*2); ctx.fill();
     // Eye
-    ctx.fillStyle = '#111';
-    ctx.beginPath(); ctx.arc(hx+hr*0.4, hy-hr*0.1, hr*0.22, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle='#111';
+    ctx.beginPath(); ctx.arc(hx+hr*.4,hy-hr*.1,hr*.22,0,Math.PI*2); ctx.fill();
     // Beak
-    ctx.fillStyle = '#f59e0b';
-    ctx.beginPath(); ctx.moveTo(hx+hr*0.9,hy); ctx.lineTo(hx+hr*1.6,hy+hr*0.1); ctx.lineTo(hx+hr*0.9,hy+hr*0.35); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#f59e0b';
+    ctx.beginPath(); ctx.moveTo(hx+hr*.9,hy); ctx.lineTo(hx+hr*1.6,hy+hr*.1); ctx.lineTo(hx+hr*.9,hy+hr*.35); ctx.closePath(); ctx.fill();
     // Comb
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath(); ctx.arc(hx, hy-hr*1.1, hr*0.35, 0, Math.PI*2); ctx.fill();
-    // Legs
-    ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    const t = Date.now()/180, ls = Math.sin(t)*7;
-    ctx.beginPath(); ctx.moveTo(bw*0.1,bh*0.85); ctx.lineTo(bw*0.1+ls,bh*0.85+16); ctx.lineTo(bw*0.1+ls+9,bh*0.85+16); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-bw*0.1,bh*0.85); ctx.lineTo(-bw*0.1-ls,bh*0.85+16); ctx.lineTo(-bw*0.1-ls+9,bh*0.85+16); ctx.stroke();
-    // Character accessory
-    if (charId === 'guardian') {
-      ctx.strokeStyle = 'rgba(96,165,250,0.7)'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.ellipse(0, 0, bw*1.15, bh*1.15, 0, 0, Math.PI*2); ctx.stroke();
-    } else if (charId === 'royal') {
-      ctx.fillStyle = '#f5c842';
-      ctx.beginPath(); ctx.moveTo(hx-hr*0.7,hy-hr*0.9); ctx.lineTo(hx-hr*0.7,hy-hr*1.6); ctx.lineTo(hx,hy-hr*1.2); ctx.lineTo(hx+hr*0.4,hy-hr*1.7); ctx.lineTo(hx+hr*0.8,hy-hr*1.6); ctx.lineTo(hx+hr*0.8,hy-hr*0.9); ctx.closePath(); ctx.fill();
-    } else if (charId === 'speed') {
-      ctx.fillStyle = '#7c4a1e';
-      ctx.beginPath(); ctx.ellipse(hx, hy-hr*0.9, hr*1.3, hr*0.28, 0, 0, Math.PI*2); ctx.fill();
-      ctx.fillRect(hx-hr*0.6, hy-hr*1.65, hr*1.2, hr*0.8);
-    } else if (charId === 'magnet') {
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath(); ctx.ellipse(hx, hy-hr*0.9, hr*1.1, hr*0.28, 0, 0, Math.PI*2); ctx.fill();
-      ctx.fillRect(hx-hr*0.8, hy-hr*1.2, hr*1.6, hr*0.35);
-    } else if (charId === 'jumper') {
-      ctx.fillStyle = 'rgba(168,85,247,0.6)';
-      ctx.beginPath(); ctx.ellipse(hx+hr*0.1, hy, hr*0.75, hr*0.28, 0, 0, Math.PI*2); ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function _drawRunner() {
-    const r = _runner;
-    const dh = r.ducking ? r.h * DUCK_H : r.h;
-    // ── USE actual physics y, not hardcoded ground ──
-    const ry = r.y;
-    if (r.invincible && Math.floor(r.blinkTimer*10)%2===0) return;
-    if (_hasPowerup('shield')) {
-      _ctx.strokeStyle = 'rgba(167,139,250,0.5)'; _ctx.lineWidth = 3;
-      _ctx.beginPath(); _ctx.ellipse(r.x+r.w/2, ry+dh/2, 44, 50, 0, 0, Math.PI*2); _ctx.stroke();
-    }
-    _ctx.save();
-    if (r.ducking) { _ctx.translate(r.x+r.w/2, _groundY); _ctx.scale(1, DUCK_H); _ctx.translate(-(r.x+r.w/2), -_groundY); }
-    _drawChickenShape(r.x+r.w/2, ry+dh/2, r.w, dh, _char ? _char.id : 'guardian');
-    _ctx.restore();
-  }
-
-  function _drawObstacle(o) {
-    const x=o.x, y=o.y, w=o.w, h=o.h, cx=x+w/2, cy=y+h/2;
-    const ctx=_ctx;
-    ctx.save();
-    if (o.type==='car') {
-      // Shadow
-      ctx.fillStyle='rgba(0,0,0,0.3)';
-      ctx.beginPath(); ctx.ellipse(cx, y+h+4, w*0.45, 6, 0, 0, Math.PI*2); ctx.fill();
-      // Body
-      ctx.fillStyle='#e11d48';
-      ctx.fillRect(x+w*0.05, y+h*0.3, w*0.9, h*0.5);
-      // Roof
-      ctx.fillStyle='#b91c1c';
-      ctx.beginPath(); ctx.moveTo(x+w*0.2,y+h*0.3); ctx.lineTo(x+w*0.25,y+h*0.05); ctx.lineTo(x+w*0.75,y+h*0.05); ctx.lineTo(x+w*0.8,y+h*0.3); ctx.closePath(); ctx.fill();
-      // Windshield
-      ctx.fillStyle='rgba(147,210,255,0.7)';
-      ctx.beginPath(); ctx.moveTo(x+w*0.22,y+h*0.28); ctx.lineTo(x+w*0.27,y+h*0.08); ctx.lineTo(x+w*0.73,y+h*0.08); ctx.lineTo(x+w*0.78,y+h*0.28); ctx.closePath(); ctx.fill();
-      // Headlights
-      ctx.fillStyle='#fbbf24';
-      ctx.fillRect(x+w*0.82, y+h*0.35, w*0.1, h*0.14);
-      ctx.fillRect(x+w*0.08, y+h*0.35, w*0.1, h*0.14);
-      // Wheels
-      ctx.fillStyle='#111';
-      ctx.beginPath(); ctx.arc(x+w*0.22, y+h*0.82, h*0.17, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+w*0.78, y+h*0.82, h*0.17, 0, Math.PI*2); ctx.fill();
-      // Wheel shine
-      ctx.fillStyle='#555';
-      ctx.beginPath(); ctx.arc(x+w*0.22, y+h*0.82, h*0.09, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+w*0.78, y+h*0.82, h*0.09, 0, Math.PI*2); ctx.fill();
-    } else if (o.type==='drone'||o.type==='satellite') {
-      const wb = Math.sin(Date.now()/250)*4;
-      ctx.translate(0, wb);
-      // Body
-      ctx.fillStyle='#334155';
-      ctx.fillRect(x+w*0.25, y+h*0.25, w*0.5, h*0.5);
-      // Arms
-      ctx.strokeStyle='#64748b'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.moveTo(x+w*0.25,y+h*0.35); ctx.lineTo(x,y+h*0.1); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+w*0.75,y+h*0.35); ctx.lineTo(x+w,y+h*0.1); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+w*0.25,y+h*0.65); ctx.lineTo(x,y+h*0.9); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+w*0.75,y+h*0.65); ctx.lineTo(x+w,y+h*0.9); ctx.stroke();
-      // Rotors (spinning)
-      const rot = Date.now()/80;
-      ctx.strokeStyle='rgba(148,163,184,0.8)'; ctx.lineWidth=2;
-      [[x,y+h*0.1],[x+w,y+h*0.1],[x,y+h*0.9],[x+w,y+h*0.9]].forEach(function(pt){
-        ctx.beginPath(); ctx.moveTo(pt[0]+Math.cos(rot)*14, pt[1]+Math.sin(rot)*5); ctx.lineTo(pt[0]-Math.cos(rot)*14, pt[1]-Math.sin(rot)*5); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(pt[0]+Math.cos(rot+1.57)*14, pt[1]+Math.sin(rot+1.57)*5); ctx.lineTo(pt[0]-Math.cos(rot+1.57)*14, pt[1]-Math.sin(rot+1.57)*5); ctx.stroke();
-      });
-      // Camera
-      ctx.fillStyle='#1e293b'; ctx.beginPath(); ctx.arc(cx, cy+h*0.1, h*0.12, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle='#60a5fa'; ctx.beginPath(); ctx.arc(cx, cy+h*0.1, h*0.07, 0, Math.PI*2); ctx.fill();
-      // Blink
-      if (Math.floor(Date.now()/500)%2===0) { ctx.fillStyle='#ef4444'; ctx.beginPath(); ctx.arc(cx, y+h*0.35, 4, 0, Math.PI*2); ctx.fill(); }
-    } else if (o.type==='rocket') {
-      // Flame
-      const flicker = Math.sin(Date.now()/60)*6;
-      const fg = ctx.createLinearGradient(cx, y+h*0.85, cx, y+h+20+flicker);
-      fg.addColorStop(0,'#f59e0b'); fg.addColorStop(0.5,'#ef4444'); fg.addColorStop(1,'transparent');
-      ctx.fillStyle=fg;
-      ctx.beginPath(); ctx.moveTo(x+w*0.35,y+h*0.88); ctx.lineTo(cx, y+h+20+flicker); ctx.lineTo(x+w*0.65,y+h*0.88); ctx.closePath(); ctx.fill();
-      // Body gradient
-      const bg2 = ctx.createLinearGradient(x+w*0.3,0,x+w*0.7,0);
-      bg2.addColorStop(0,'#94a3b8'); bg2.addColorStop(0.5,'#e2e8f0'); bg2.addColorStop(1,'#94a3b8');
-      ctx.fillStyle=bg2; ctx.fillRect(x+w*0.3, y+h*0.2, w*0.4, h*0.7);
-      // Nose cone
-      ctx.fillStyle='#ef4444';
-      ctx.beginPath(); ctx.moveTo(cx,y); ctx.lineTo(x+w*0.3,y+h*0.22); ctx.lineTo(x+w*0.7,y+h*0.22); ctx.closePath(); ctx.fill();
-      // Window
-      ctx.fillStyle='rgba(147,210,255,0.8)';
-      ctx.beginPath(); ctx.arc(cx, y+h*0.42, w*0.1, 0, Math.PI*2); ctx.fill();
-      // Fins
-      ctx.fillStyle='#64748b';
-      ctx.beginPath(); ctx.moveTo(x+w*0.3,y+h*0.75); ctx.lineTo(x+w*0.05,y+h*0.9); ctx.lineTo(x+w*0.3,y+h*0.88); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+w*0.7,y+h*0.75); ctx.lineTo(x+w*0.95,y+h*0.9); ctx.lineTo(x+w*0.7,y+h*0.88); ctx.closePath(); ctx.fill();
-    } else if (o.type==='cone') {
-      // Shadow
-      ctx.fillStyle='rgba(0,0,0,0.25)';
-      ctx.beginPath(); ctx.ellipse(cx, y+h+3, w*0.4, 5, 0, 0, Math.PI*2); ctx.fill();
-      // Cone body
-      ctx.fillStyle='#f97316';
-      ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(x+w, y+h); ctx.lineTo(x, y+h); ctx.closePath(); ctx.fill();
-      // White stripes
-      ctx.strokeStyle='#fff'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(cx-w*0.15,y+h*0.45); ctx.lineTo(cx+w*0.15,y+h*0.45); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx-w*0.28,y+h*0.72); ctx.lineTo(cx+w*0.28,y+h*0.72); ctx.stroke();
-      // Reflection
-      ctx.fillStyle='rgba(255,255,255,0.15)';
-      ctx.beginPath(); ctx.moveTo(cx,y+4); ctx.lineTo(cx-w*0.12,y+h*0.4); ctx.lineTo(cx-w*0.05,y+h*0.4); ctx.closePath(); ctx.fill();
-    } else if (o.type==='meme'||o.type==='debris') {
-      // Bomb
+    ctx.fillStyle='#ef4444';
+    ctx.beginPath(); ctx.arc(hx,hy-hr*1.1,hr*.35,0,Math.PI*2); ctx.fill();
+    // Animated legs
+    ctx.strokeStyle='#f59e0b'; ctx.lineWidth=3; ctx.lineCap='round';
+    const t=Date.now()/180, ls=Math.sin(t)*7;
+    ctx.beginPath(); ctx.moveTo(bw*.1,bh*.85); ctx.lineTo(bw*.1+ls,bh*.85+16); ctx.lineTo(bw*.1+ls+9,bh*.85+16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-bw*.1,bh*.85); ctx.lineTo(-bw*.1-ls,bh*.85+16); ctx.lineTo(-bw*.1-ls+9,bh*.85+16); ctx.stroke();
+    // Accessories
+    if (charId==='guardian') {
+      ctx.strokeStyle='rgba(96,165,250,0.7)'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.ellipse(0,0,bw*1.15,bh*1.15,0,0,Math.PI*2); ctx.stroke();
+    } else if (charId==='royal') {
+      ctx.fillStyle='#f5c842';
+      ctx.beginPath(); ctx.moveTo(hx-hr*.7,hy-hr*.9); ctx.lineTo(hx-hr*.7,hy-hr*1.6); ctx.lineTo(hx,hy-hr*1.2); ctx.lineTo(hx+hr*.4,hy-hr*1.7); ctx.lineTo(hx+hr*.8,hy-hr*1.6); ctx.lineTo(hx+hr*.8,hy-hr*.9); ctx.closePath(); ctx.fill();
+    } else if (charId==='speed') {
+      ctx.fillStyle='#7c4a1e';
+      ctx.beginPath(); ctx.ellipse(hx,hy-hr*.9,hr*1.3,hr*.28,0,0,Math.PI*2); ctx.fill();
+      ctx.fillRect(hx-hr*.6,hy-hr*1.65,hr*1.2,hr*.8);
+    } else if (charId==='magnet') {
       ctx.fillStyle='#1e293b';
-      ctx.beginPath(); ctx.arc(cx, cy+h*0.05, Math.min(w,h)*0.38, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle='#475569'; ctx.lineWidth=2; ctx.stroke();
-      // Fuse
-      ctx.strokeStyle='#92400e'; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.moveTo(cx+w*0.3, cy-h*0.3); ctx.quadraticCurveTo(cx+w*0.5, cy-h*0.6, cx+w*0.3, cy-h*0.75); ctx.stroke();
-      // Spark
-      if (Math.floor(Date.now()/150)%2===0) {
-        ctx.fillStyle='#fbbf24'; ctx.beginPath(); ctx.arc(cx+w*0.3, cy-h*0.75, 4, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle='#f97316'; ctx.beginPath(); ctx.arc(cx+w*0.3+4, cy-h*0.75-4, 2.5, 0, Math.PI*2); ctx.fill();
-      }
-      // Skull
-      ctx.fillStyle='#fff'; ctx.font='bold '+(Math.min(w,h)*0.35)+'px sans-serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('☠', cx, cy+h*0.06);
-    } else if (o.type==='box') {
-      // Crate
-      ctx.fillStyle='#7c3aed'; ctx.fillRect(x,y,w,h);
-      ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1.5; ctx.strokeRect(x+2,y+2,w-4,h-4);
-      ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(cx,y); ctx.lineTo(cx,y+h); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x,cy); ctx.lineTo(x+w,cy); ctx.stroke();
-      // Warning label
-      ctx.fillStyle='#fbbf24'; ctx.font='bold '+(h*0.35)+'px sans-serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('!', cx, cy);
-    } else if (o.type==='barrel') {
-      // Barrel
-      ctx.fillStyle='#92400e';
-      ctx.beginPath(); ctx.ellipse(cx,y+h*0.08,w*0.45,h*0.1,0,0,Math.PI*2); ctx.fill();
-      ctx.fillRect(x+w*0.06,y+h*0.08,w*0.88,h*0.84);
-      ctx.beginPath(); ctx.ellipse(cx,y+h*0.92,w*0.45,h*0.1,0,0,Math.PI*2); ctx.fill();
-      // Bands
-      ctx.strokeStyle='#78350f'; ctx.lineWidth=3;
-      [0.3,0.55,0.78].forEach(function(t){
-        ctx.beginPath(); ctx.moveTo(x+w*0.06,y+h*t); ctx.lineTo(x+w*0.94,y+h*t); ctx.stroke();
-      });
-      ctx.fillStyle='rgba(255,150,50,0.12)'; ctx.fillRect(x+w*0.06,y+h*0.08,w*0.88,h*0.84);
-    } else if (o.type==='wall') {
-      const rows=4, bH=h/rows;
-      for(let r=0;r<rows;r++){
-        ctx.fillStyle=r%2===0?'#b91c1c':'#991b1b'; ctx.fillRect(x,y+r*bH,w,bH-1);
-        ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1;
-        const off=r%2===0?0:w*0.5;
-        for(let b=0;b<3;b++){const bx=x+off+b*(w*0.65);if(bx>x&&bx<x+w){ctx.beginPath();ctx.moveTo(bx,y+r*bH);ctx.lineTo(bx,y+r*bH+bH-1);ctx.stroke();}}
-      }
-    } else if (o.type==='spike') {
-      ctx.fillStyle='#475569'; ctx.fillRect(x,y+h*0.6,w,h*0.4);
-      const cnt=Math.max(3,Math.round(w/14));
-      for(let s=0;s<cnt;s++){
-        const sx=x+w*(s+0.5)/cnt;
-        ctx.fillStyle='#94a3b8'; ctx.beginPath(); ctx.moveTo(sx-7,y+h*0.62); ctx.lineTo(sx,y); ctx.lineTo(sx+7,y+h*0.62); ctx.closePath(); ctx.fill();
-        ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(sx-2,y+h*0.5); ctx.lineTo(sx,y+h*0.08); ctx.stroke();
-      }
-    } else {
-      const tc={man:'#059669',rug:'#dc2626',sign:'#0891b2'};
-      ctx.fillStyle=tc[o.type]||'#6b7280'; ctx.fillRect(x,y,w,h);
-      ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2; ctx.strokeRect(x+1,y+1,w-2,h-2);
-      ctx.fillStyle='#fff'; ctx.font='bold '+(Math.min(w,h)*0.45)+'px sans-serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(o.type[0].toUpperCase(), cx, cy);
+      ctx.beginPath(); ctx.ellipse(hx,hy-hr*.9,hr*1.1,hr*.28,0,0,Math.PI*2); ctx.fill();
+      ctx.fillRect(hx-hr*.8,hy-hr*1.2,hr*1.6,hr*.35);
+    } else if (charId==='jumper') {
+      ctx.fillStyle='rgba(168,85,247,0.6)';
+      ctx.beginPath(); ctx.ellipse(hx+hr*.1,hy,hr*.75,hr*.28,0,0,Math.PI*2); ctx.fill();
     }
     ctx.restore();
   }
 
   function _drawCoin(c) {
-    if (c.collected) return;
-    const cx = c.x+c.w/2, cy = c.y+c.h/2, r = 9;
+    if (c.collected && c.alpha <= 0) return;
+    _ctx.save();
+    _ctx.globalAlpha = c.collected ? c.alpha : 1;
     _ctx.fillStyle = '#f5c842';
-    _ctx.beginPath(); _ctx.arc(cx, cy, r, 0, Math.PI*2); _ctx.fill();
-    _ctx.fillStyle = '#7c4a00';
-    _ctx.font = 'bold 10px sans-serif';
-    _ctx.textAlign = 'center'; _ctx.textBaseline = 'middle';
-    _ctx.fillText('$', cx, cy+0.5);
+    _ctx.strokeStyle = '#e8a020'; _ctx.lineWidth = 1.5;
+    _ctx.beginPath(); _ctx.ellipse(c.x, c.y, 10, 13, 0, 0, Math.PI*2);
+    _ctx.fill(); _ctx.stroke();
+    _ctx.restore();
   }
 
   function _drawPuItem(p) {
-    const puCfg = window.ECHICK_CONFIG.POWERUPS.find(function(pu){return pu.id===p.puId;});
-    if (!puCfg) return;
-    const cx = p.x+p.w/2, cy = p.y+p.h/2, r = 14;
-    _ctx.fillStyle = puCfg.color;
-    _ctx.beginPath();
-    for (var i=0;i<6;i++){var a=(i/6)*Math.PI*2-Math.PI/6;i===0?_ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):_ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));}
-    _ctx.closePath(); _ctx.fill();
-    _ctx.fillStyle = '#fff';
-    _ctx.font = 'bold 10px sans-serif';
+    _ctx.save();
+    _ctx.font = '22px serif';
     _ctx.textAlign = 'center'; _ctx.textBaseline = 'middle';
-    var lbl = {magnet:'M',turbo:'T',rocket:'R',shield:'S',slow:'~',vacuum:'V',fly:'F',rage:'!',double:'x2'};
-    _ctx.fillText(lbl[p.puId]||'?', cx, cy+0.5);
+    const pulse = 1 + Math.sin(Date.now()/300)*0.08;
+    _ctx.scale(pulse, pulse);
+    _ctx.fillText(p.emoji, p.x/pulse, p.y/pulse);
+    _ctx.restore();
   }
 
-  function _drawEffects() {
-    // Magnet beam
-    if (_hasPowerup('magnet') || _hasPowerup('vacuum')) {
-      const mg = _ctx.createRadialGradient(_runner.x + _runner.w/2, _runner.y + _runner.h/2, 5,
-                                            _runner.x + _runner.w/2, _runner.y + _runner.h/2, 120);
-      mg.addColorStop(0, 'rgba(96,165,250,0.12)');
-      mg.addColorStop(1, 'transparent');
-      _ctx.fillStyle = mg;
-      _ctx.beginPath();
-      _ctx.arc(_runner.x + _runner.w/2, _runner.y + _runner.h/2, 120, 0, Math.PI*2);
-      _ctx.fill();
-    }
-    // Rage glow
-    if (_hasPowerup('rage')) {
-      _ctx.shadowBlur = 20; _ctx.shadowColor = '#f87171';
-      _ctx.shadowBlur = 0;
-    }
-  }
-
-  // ─────────────────────────────────────────────
-  //  Spawning
-  // ─────────────────────────────────────────────
-  function _spawnObstacle() {
-    const cfg = window.ECHICK_CONFIG.OBSTACLES;
-    const obs = cfg[Math.floor(Math.random() * cfg.length)];
-    let y, h = obs.h;
-
-    if (obs.type === 'drone' || obs.type === 'satellite' || obs.type === 'rocket') {
-      // Air obstacle — duck under or jump over depending on height
-      y = _groundY - h - 60 - Math.random() * 40;
-    } else if (obs.type === 'laser') {
-      y = _groundY - 30 - Math.random() * 60;
+  function _drawObstacle(o) {
+    const x=o.x,y=o.y,w=o.w,h=o.h,cx=x+w/2,cy=y+h/2;
+    const ctx=_ctx; ctx.save();
+    if (o.type==='car') {
+      ctx.fillStyle='rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.ellipse(cx,y+h+3,w*.44,5,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#e11d48'; ctx.fillRect(x+w*.05,y+h*.3,w*.9,h*.5);
+      ctx.fillStyle='#b91c1c';
+      ctx.beginPath(); ctx.moveTo(x+w*.2,y+h*.3); ctx.lineTo(x+w*.25,y+h*.05); ctx.lineTo(x+w*.75,y+h*.05); ctx.lineTo(x+w*.8,y+h*.3); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(147,210,255,0.7)';
+      ctx.beginPath(); ctx.moveTo(x+w*.22,y+h*.28); ctx.lineTo(x+w*.27,y+h*.08); ctx.lineTo(x+w*.73,y+h*.08); ctx.lineTo(x+w*.78,y+h*.28); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#fbbf24'; ctx.fillRect(x+w*.82,y+h*.35,w*.1,h*.14); ctx.fillRect(x+w*.08,y+h*.35,w*.1,h*.14);
+      ctx.fillStyle='#111';
+      ctx.beginPath(); ctx.arc(x+w*.22,y+h*.82,h*.17,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+w*.78,y+h*.82,h*.17,0,Math.PI*2); ctx.fill();
+    } else if (o.type==='barrier') {
+      ctx.fillStyle='#f59e0b'; ctx.fillRect(x,y,w,h);
+      ctx.fillStyle='#dc2626';
+      for(let i=0;i<4;i++){if(i%2===0){ctx.fillRect(x+i*w/4,y,w/4,h/2);}else{ctx.fillRect(x+i*w/4,y+h/2,w/4,h/2);}}
+      ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1; ctx.strokeRect(x,y,w,h);
+    } else if (o.type==='bird') {
+      ctx.fillStyle='#7c3aed';
+      ctx.beginPath(); ctx.ellipse(cx,cy,w*.45,h*.3,0,0,Math.PI*2); ctx.fill();
+      const flap=Math.sin(Date.now()/120)*0.4;
+      ctx.fillStyle='#6d28d9';
+      ctx.beginPath(); ctx.moveTo(cx-w*.1,cy); ctx.lineTo(cx-w*.6,cy-h*(.4+flap)); ctx.lineTo(cx,cy-h*.15); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx+w*.1,cy); ctx.lineTo(cx+w*.6,cy-h*(.4+flap)); ctx.lineTo(cx,cy-h*.15); ctx.closePath(); ctx.fill();
     } else {
-      y = _groundY - h;
+      ctx.fillStyle='#6b7280'; ctx.fillRect(x,y,w,h);
     }
+    ctx.restore();
+  }
 
-    _obstacles.push({ type: obs.type, x: _W + 40, y, w: obs.w, h });
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Collision — uses runner.y (real position), NOT hardcoded groundY
+  // ─────────────────────────────────────────────────────────────────────────
+  function _collides(a, b) {
+    const mg = 10;
+    const ah = a.ducking ? a.h * DUCK_SCALE : a.h;
+    const ay = a.y; // ← real physics y
+    return (
+      a.x+mg < b.x+b.w-mg && a.x+a.w-mg > b.x+mg &&
+      ay+mg  < b.y+b.h-mg && ay+ah-mg   > b.y+mg
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Spawn helpers
+  // ─────────────────────────────────────────────────────────────────────────
+  function _spawnObstacle() {
+    const cfg  = window.ECHICK_CONFIG.OBSTACLES;
+    const type = cfg[Math.floor(Math.random()*cfg.length)];
+    const w    = type.w || (50+Math.random()*30);
+    const h    = type.h || (50+Math.random()*40);
+    const isAir = type.air;
+    const y    = isAir ? _groundY - h - 60 - Math.random()*60 : _groundY - h;
+    _obstacles.push({ type:type.id, x:_W+20, y, w, h });
   }
 
   function _spawnCoinRow() {
-    const count  = 3 + Math.floor(Math.random() * 5);
-    const baseY  = _groundY - 50 - Math.random() * 80;
-    const startX = _W + 60;
-    for (let i = 0; i < count; i++) {
-      _coinItems.push({ x: startX + i * 36, y: baseY, w: 24, h: 24, collected: false });
+    const count  = 3 + Math.floor(Math.random()*5);
+    const startX = _W + 20;
+    const yPos   = _groundY - _runner.h - 20 - Math.random()*60;
+    for (let i=0; i<count; i++) {
+      _coinItems.push({ x:startX+i*32, y:yPos, collected:false, vy:0, alpha:1 });
     }
   }
 
   function _spawnPowerupItem() {
     const pus = window.ECHICK_CONFIG.POWERUPS;
-    const pu  = pus[Math.floor(Math.random() * pus.length)];
-    _puItems.push({ puId: pu.id, x: _W + 60, y: _groundY - 70, w: 36, h: 36, collected: false });
+    const pu  = pus[Math.floor(Math.random()*pus.length)];
+    _puItems.push({ x:_W+30, y:_groundY-_runner.h-30, puId:pu.id, emoji:pu.emoji||'⭐' });
   }
 
-  // ─────────────────────────────────────────────
-  //  Collect / activate
-  // ─────────────────────────────────────────────
-  function _collectCoin(c) {
-    c.collected = true;
-    const multiplier = _hasPowerup('double') ? 2 : 1;
-    const charMult   = (_char?.abilityVal && _char?.ability === 'Coin Multiplier') ? _char.abilityVal : 1;
-    const earned     = 1 * multiplier * charMult;
-    _coins  += earned;
-    _deltaCoinsSinceVal += earned;
-    _combo   = Math.min(8, _combo + 0.2);
-    _comboTimer = 2.5;
-    if (_combo >= 2) { document.getElementById('hud-combo').classList.remove('hidden'); }
-    Audio2.sfxCoin();
-    if (_coins % 10 === 0) {
-      const msgs = window.ECHICK_CONFIG.POPUPS;
-      _showPopup(msgs[Math.floor(Math.random() * msgs.length)]);
-    }
-  }
-
-  function _activatePowerup(p) {
-    const puCfg = window.ECHICK_CONFIG.POWERUPS.find(pu => pu.id === p.puId);
+  function _activatePowerup(puId) {
+    const puCfg = window.ECHICK_CONFIG.POWERUPS.find(p=>p.id===puId);
     if (!puCfg) return;
-    // Remove old instance
-    _powerups = _powerups.filter(pw => pw.id !== puCfg.id);
-    _powerups.push({ id: puCfg.id, timeLeft: puCfg.duration / 1000, total: puCfg.duration / 1000, config: puCfg });
-    Audio2.sfxPowerup();
-    _showPopup(`${puCfg.emoji} ${puCfg.name}!`);
-    _renderPowerupSlots();
-    // Apply effects
-    if (puCfg.id === 'turbo' || puCfg.id === 'rocket') _speed = Math.min(SPEED_MAX, _speed * 1.4);
-    if (puCfg.id === 'fly')    { _runner.y = _groundY - _runner.h - 80; _runner.grounded = false; _runner.vy = JUMP_VEL * 1.3; }
-    if (puCfg.id === 'slow')   _speed *= 0.6;
+    _showPopup((puCfg.emoji||'⭐')+' '+puCfg.name+'!');
+    _powerups.push({ puId, timer: puCfg.duration||5 });
+    if (puId==='fly')    { _runner.vy=JUMP_VEL*1.2; _runner.grounded=false; }
+    if (puId==='shield') { /* handled in collision */ }
+    if (puId==='magnet') { /* handled in coin update */ }
+    if (puId==='turbo')  { _speed=Math.min(_speed*1.4, SPEED_MAX); }
   }
 
-  function _deactivatePowerup(p) {
-    if (p.id === 'slow' && _speed < 260) _speed = 260;
-    _renderPowerupSlots();
-  }
+  function _hasPowerup(id)    { return _powerups.some(p=>p.puId===id); }
+  function _removePowerup(id) { _powerups = _powerups.filter(p=>p.puId!==id); }
 
-  function _hasPowerup(id) { return _powerups.some(p => p.id === id); }
-  function _removePowerup(id) { _powerups = _powerups.filter(p => p.id !== id); _renderPowerupSlots(); }
-
-  function _renderPowerupSlots() {
-    if (!_powerupRow) return;
-    _powerupRow.innerHTML = '';
-    _powerups.forEach(p => {
-      const slot = document.createElement('div');
-      slot.className = 'powerup-slot';
-      slot.textContent = p.config.emoji;
-      const bar = document.createElement('div');
-      bar.className = 'powerup-slot-timer';
-      bar.style.animationDuration = p.total + 's';
-      slot.appendChild(bar);
-      _powerupRow.appendChild(slot);
-    });
-  }
-
-  // ─────────────────────────────────────────────
-  //  Magnet / vacuum coin attraction
-  // ─────────────────────────────────────────────
-  function _attractCoins(dt) {
-    if (!_hasPowerup('magnet') && !_hasPowerup('vacuum')) return;
-    const range = _hasPowerup('vacuum') ? 200 : 130;
-    _coinItems.forEach(c => {
-      if (c.collected) return;
-      const dx = (_runner.x + _runner.w/2) - (c.x + c.w/2);
-      const dy = (_runner.y + _runner.h/2) - (c.y + c.h/2);
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist < range) {
-        c.x += dx * 6 * dt;
-        c.y += dy * 6 * dt;
-      }
-    });
-  }
-
-  // ─────────────────────────────────────────────
-  //  Collision
-  // ─────────────────────────────────────────────
-  function _collides(a, b) {
-    const margin = 10;
-    const ah = a.ducking ? a.h * DUCK_H : a.h;
-    const ay = a.y; // use real physics position
-    return (
-      a.x + margin < b.x + b.w - margin &&
-      a.x + a.w - margin > b.x + margin &&
-      ay + margin < b.y + b.h - margin &&
-      ay + ah - margin > b.y + margin
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  //  Popup messages
-  // ─────────────────────────────────────────────
-  function _showPopup(text) {
-    if (!_gamePopup) return;
-    _gamePopup.innerHTML = '';
-    const msg = document.createElement('div');
-    msg.className = 'popup-msg';
-    msg.textContent = text;
-    _gamePopup.appendChild(msg);
-    setTimeout(() => { if (_gamePopup) _gamePopup.innerHTML = ''; }, 1200);
-  }
-
-  // ─────────────────────────────────────────────
-  //  HUD update
-  // ─────────────────────────────────────────────
-  function _updateHUD() {
-    if (_hudDist)   _hudDist.textContent   = Math.floor(_distance) + ' M';
-    if (_hudScore)  _hudScore.textContent  = Math.floor(_score).toLocaleString();
-    if (_hudCoins)  _hudCoins.textContent  = Math.floor(_coins).toLocaleString();
-    if (_comboVal && _combo >= 2) _comboVal.textContent = 'x' + Math.floor(_combo);
-    const speedPct = Math.min(100, ((_speed - 260) / (SPEED_MAX - 260)) * 100);
-    if (_speedFill) _speedFill.style.width = (20 + speedPct * 0.8) + '%';
-    _attractCoins(1/60);
-  }
-
-  // ─────────────────────────────────────────────
-  //  Die
-  // ─────────────────────────────────────────────
-  function _updateLivesHUD() {
-    const el = document.getElementById('hud-lives');
-    if (el) el.innerHTML = (_lives >= 2 ? '❤️❤️' : _lives === 1 ? '❤️🖤' : '🖤🖤');
-  }
-
-  function _die() {
-    Audio2.sfxHit();
-    _lives--;
-    _updateLivesHUD();
-    if (_lives > 0) {
-      // Lost a life — keep running with brief invincibility
-      _runner.invincible = true;
-      _runner.invincibleTimer = 2.2;
-      _showPopup('💔 -1 Life!');
-      return;
-    }
-    _state = 'dead';
-    cancelAnimationFrame(_raf);
-    Audio2.sfxGameOver();
-
-    // Fill game-over modal
-    document.getElementById('go-dist').textContent  = Math.floor(_distance) + ' M';
-    document.getElementById('go-score').textContent = Math.floor(_score).toLocaleString();
-    document.getElementById('go-coins').textContent = '🪙 ' + Math.floor(_coins).toLocaleString();
-    const prevBest = _player?.best_distance || 0;
-    document.getElementById('go-best').textContent  = Math.max(prevBest, Math.floor(_distance)) + ' M';
-
-    setTimeout(() => document.getElementById('gameover-modal').classList.remove('hidden'), 600);
-
-    // Submit to DB with security
-    _submitRun();
-  }
-
-  async function _submitRun() {
-    try {
-      const payload = await Security.finalizeSession(Math.floor(_coins), Math.floor(_score), Math.floor(_distance));
-      const result  = await DB.submitRun(_player.telegram_id, payload);
-      if (result) {
-        // Refresh player data
-        const updated = await DB.getPlayer(_player.telegram_id);
-        if (updated) { Auth.setPlayer(updated); HomeScreen.refreshPlayer(updated); }
-      }
-    } catch(e) { console.error('[GameEngine] Submit run failed', e); }
-  }
-
-  // ─────────────────────────────────────────────
-  //  Pause / Resume / Quit
-  // ─────────────────────────────────────────────
-  function pause() {
-    if (_state !== 'running') return;
-    _state = 'paused';
-    cancelAnimationFrame(_raf);
-    Audio2.pauseBg();
-    document.getElementById('pause-modal').classList.remove('hidden');
-  }
-
-  function resume() {
-    if (_state !== 'paused') return;
-    document.getElementById('pause-modal').classList.add('hidden');
-    _state    = 'running';
-    _lastTime = performance.now();
-    _raf      = requestAnimationFrame(_loop);
-    Audio2.playBg();
-  }
-
-  function _quit() {
-    _state = 'idle';
-    cancelAnimationFrame(_raf);
-    Audio2.stopBg();
-    document.getElementById('pause-modal').classList.add('hidden');
-    App.navigateTo('home');
-  }
-
-  function _hideGameOver() {
-    document.getElementById('gameover-modal').classList.add('hidden');
-    cancelAnimationFrame(_raf);
-    Audio2.stopBg();
-  }
-
-  // ─────────────────────────────────────────────
-  //  Input (touch + keyboard)
-  // ─────────────────────────────────────────────
-  //  Input — touch + keyboard
-  //  Designed for Telegram Mini App + browsers
-  // ─────────────────────────────────────────────
-  let _touchStartX  = 0;
-  let _touchStartY  = 0;
-  let _touchIsDuck  = false;   // true while finger is held in a duck gesture
-  let _docTouchStart = null, _docTouchMove = null, _docTouchEnd = null, _docTouchCancel = null;
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Input — canvas-only listeners, passive:false, full scroll lock
+  // ─────────────────────────────────────────────────────────────────────────
+  let _txStart=0, _tyStart=0, _isDuck=false;
+  let _evTS=null, _evTM=null, _evTE=null, _evTC=null;
 
   function _bindInput() {
-    // ── Remove old listeners ─────────────────────────────────────────────
-    const cv = document.getElementById('game-canvas');
-    if (_docTouchStart)  { cv.removeEventListener('touchstart',  _docTouchStart);  }
-    if (_docTouchMove)   { cv.removeEventListener('touchmove',   _docTouchMove);   }
-    if (_docTouchEnd)    { cv.removeEventListener('touchend',    _docTouchEnd);    }
-    if (_docTouchCancel) { cv.removeEventListener('touchcancel', _docTouchCancel); }
+    // Remove any old listeners
+    if (_cv && _evTS) {
+      _cv.removeEventListener('touchstart',  _evTS);
+      _cv.removeEventListener('touchmove',   _evTM);
+      _cv.removeEventListener('touchend',    _evTE);
+      _cv.removeEventListener('touchcancel', _evTC);
+    }
     document.removeEventListener('keydown', _onKey);
     document.removeEventListener('keyup',   _onKeyUp);
 
-    // ── Lock page / Telegram Mini App from scrolling ─────────────────────
-    document.documentElement.style.overflow          = 'hidden';
-    document.documentElement.style.touchAction       = 'none';
-    document.documentElement.style.overscrollBehavior = 'none';
-    document.body.style.overflow                     = 'hidden';
-    document.body.style.touchAction                  = 'none';
-    document.body.style.overscrollBehavior           = 'none';
-    document.body.style.position                     = 'fixed';
-    document.body.style.width                        = '100%';
-    document.body.style.height                       = '100%';
+    // Lock page scroll (Telegram Mini App + all browsers)
+    const lockStyle = (el) => {
+      if (!el) return;
+      el.style.overflow          = 'hidden';
+      el.style.touchAction       = 'none';
+      el.style.overscrollBehavior= 'none';
+    };
+    lockStyle(document.documentElement);
+    lockStyle(document.body);
+    // Do NOT set position:fixed — it collapses the canvas height in Telegram
+    if (_cv) {
+      _cv.style.touchAction = 'none';
+    }
 
-    // ── Canvas touch handlers — passive:false so we can preventDefault ───
-    _docTouchStart = function(e) {
+    // Touch handlers on the canvas element — passive:false = can preventDefault
+    _evTS = e => {
       e.preventDefault();
       if (_state !== 'running') return;
-      _touchStartX = e.touches[0].clientX;
-      _touchStartY = e.touches[0].clientY;
-      _touchIsDuck = false;
+      _txStart = e.touches[0].clientX;
+      _tyStart = e.touches[0].clientY;
+      _isDuck  = false;
     };
 
-    _docTouchMove = function(e) {
-      // ALWAYS preventDefault — stops Telegram Mini App scroll
-      e.preventDefault();
+    _evTM = e => {
+      e.preventDefault(); // ← CRITICAL: stops Telegram page scroll on swipe-down
       if (_state !== 'running') return;
-      const dy = e.touches[0].clientY - _touchStartY;
-      const dx = e.touches[0].clientX - _touchStartX;
-      // Activate duck as soon as downward drag exceeds 15px
-      if (!_touchIsDuck && Math.abs(dy) > Math.abs(dx) && dy > 15) {
-        _touchIsDuck = true;
+      const dy = e.touches[0].clientY - _tyStart;
+      const dx = e.touches[0].clientX - _txStart;
+      if (!_isDuck && Math.abs(dy) > Math.abs(dx) && dy > 14) {
+        _isDuck = true;
         _duck(true);
       }
     };
 
-    _docTouchEnd = function(e) {
+    _evTE = e => {
       e.preventDefault();
       if (_state !== 'running') return;
-      // Always release duck when finger lifts
-      if (_touchIsDuck) {
-        _duck(false);
-        _touchIsDuck = false;
-        return; // don't also jump
-      }
-      const dx = e.changedTouches[0].clientX - _touchStartX;
-      const dy = e.changedTouches[0].clientY - _touchStartY;
-      // Swipe UP or tap → jump
-      if (Math.abs(dy) <= Math.abs(dx) || dy < -15 || (Math.abs(dx) < 15 && Math.abs(dy) < 15)) {
-        _jump();
-      }
+      if (_isDuck) { _duck(false); _isDuck=false; return; }
+      const dx = e.changedTouches[0].clientX - _txStart;
+      const dy = e.changedTouches[0].clientY - _tyStart;
+      // Tap or swipe-up = jump
+      if (dy < -14 || (Math.abs(dx)<20 && Math.abs(dy)<20)) _jump();
     };
 
-    _docTouchCancel = function(e) {
+    _evTC = e => {
       e.preventDefault();
-      if (_touchIsDuck) { _duck(false); _touchIsDuck = false; }
+      if (_isDuck) { _duck(false); _isDuck=false; }
     };
 
-    cv.addEventListener('touchstart',  _docTouchStart,  { passive: false });
-    cv.addEventListener('touchmove',   _docTouchMove,   { passive: false });
-    cv.addEventListener('touchend',    _docTouchEnd,    { passive: false });
-    cv.addEventListener('touchcancel', _docTouchCancel, { passive: false });
-
-    // ── Jump button (on-screen button fallback) ──────────────────────────
-    const jumpBtn = document.getElementById('btn-jump');
-    if (jumpBtn) {
-      jumpBtn.ontouchstart = function(e) { e.preventDefault(); e.stopPropagation(); };
-      jumpBtn.ontouchend   = function(e) {
-        e.preventDefault(); e.stopPropagation();
-        if (_state !== 'running') return;
-        _jump();
-      };
-      jumpBtn.onclick = null;
+    if (_cv) {
+      _cv.addEventListener('touchstart',  _evTS, { passive:false });
+      _cv.addEventListener('touchmove',   _evTM, { passive:false });
+      _cv.addEventListener('touchend',    _evTE, { passive:false });
+      _cv.addEventListener('touchcancel', _evTC, { passive:false });
     }
 
-    // ── Keyboard ─────────────────────────────────────────────────────────
+    // On-screen jump button
+    const jb = document.getElementById('btn-jump');
+    if (jb) {
+      jb.ontouchstart = e => { e.preventDefault(); e.stopPropagation(); };
+      jb.ontouchend   = e => { e.preventDefault(); e.stopPropagation(); if (_state==='running') _jump(); };
+      jb.onclick = null;
+    }
+
     document.addEventListener('keydown', _onKey);
     document.addEventListener('keyup',   _onKeyUp);
   }
 
   function _onKey(e) {
     if (_state !== 'running') return;
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); _jump(); }
-    if (e.code === 'ArrowDown' && !e.repeat) { e.preventDefault(); _duck(true); }
+    if (e.code==='Space' || e.code==='ArrowUp')  { e.preventDefault(); _jump(); }
+    if (e.code==='ArrowDown' && !e.repeat)        { e.preventDefault(); _duck(true); }
   }
   function _onKeyUp(e) {
-    if (e.code === 'ArrowDown') _duck(false);
+    if (e.code==='ArrowDown') _duck(false);
   }
 
+  // ── Jump — one function, no duplicates ───────────────────────────────────
   function _jump() {
     if (_runner.grounded) {
-      // First jump
       _runner.vy           = JUMP_VEL;
       _runner.grounded     = false;
       _runner.jumping      = true;
       _runner.doubleJumped = false;
-      Audio2.sfxJump();
-    } else if (!_runner.doubleJumped && (_char && _char.ability === 'Double Jump')) {
-      // Double jump (Jumper character)
-      _runner.vy           = JUMP_VEL * 0.9;
+      try { Audio2.sfxJump(); } catch(e) {}
+    } else if (!_runner.doubleJumped && _char && _char.ability==='Double Jump') {
+      _runner.vy           = JUMP_VEL * 0.88;
       _runner.doubleJumped = true;
-      Audio2.sfxJump();
+      try { Audio2.sfxJump(); } catch(e) {}
     }
   }
 
+  // ── Duck — hold while finger/key is down, release on lift ───────────────
   function _duck(active) {
-    active = (active === true);
+    active = !!active;
     if (_runner.ducking === active) return;
     _runner.ducking = active;
-    // Snap y to correct floor so physics stays consistent
     if (_runner.grounded) {
-      _runner.y = _groundY - (_runner.ducking ? _runner.h * DUCK_H : _runner.h);
+      _runner.y = _groundY - (_runner.ducking ? _runner.h*DUCK_SCALE : _runner.h);
     }
   }
 
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   //  Parallax layers
-  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   function _buildLayers() {
     const env = window.ECHICK_CONFIG.ENVIRONMENTS[_envIndex];
     _layers = [];
-    if (env.id === 'miami') {
-      _layers = [
-        { x: 0, w: _W, speed: 0.1, alpha: 0.5, color: 'rgba(20,10,5,0.6)',
-          shapes: _buildBuildings(4, _W * 0.15, _H * 0.3, _H * 0.45) },
-        { x: _W, w: _W, speed: 0.1, alpha: 0.5, color: 'rgba(20,10,5,0.6)',
-          shapes: _buildBuildings(4, _W * 0.15, _H * 0.3, _H * 0.45) },
-      ];
-    } else if (env.id === 'tokyo') {
-      _layers = [
-        { x: 0, w: _W, speed: 0.12, alpha: 0.7, color: 'rgba(0,20,50,0.8)',
-          shapes: _buildBuildings(6, _W * 0.1, _H * 0.1, _H * 0.55) },
-        { x: _W, w: _W, speed: 0.12, alpha: 0.7, color: 'rgba(0,20,50,0.8)',
-          shapes: _buildBuildings(6, _W * 0.1, _H * 0.1, _H * 0.55) },
-      ];
-    }
+    if (!env) return;
+    const buildBldgs = (n, minW, minH, maxH) => {
+      const out = [];
+      for (let i=0; i<n; i++) {
+        const bw = minW + Math.random()*minW;
+        const bh = minH + Math.random()*(maxH-minH);
+        out.push({ x:Math.random()*_W, y:_groundY-bh, w:bw, h:bh });
+      }
+      return out;
+    };
+    _layers = [
+      { x:0, w:_W, speed:0.08, alpha:0.4, color:'rgba(30,20,10,0.5)', shapes:buildBldgs(5,_W*0.12,_H*0.28,_H*0.44) },
+      { x:_W, w:_W, speed:0.08, alpha:0.4, color:'rgba(30,20,10,0.5)', shapes:buildBldgs(5,_W*0.12,_H*0.28,_H*0.44) },
+    ];
   }
 
-  function _buildBuildings(count, baseW, minH, maxH) {
-    const shapes = [];
-    for (let i = 0; i < count; i++) {
-      const w = baseW + Math.random() * baseW;
-      const h = minH + Math.random() * (maxH - minH);
-      shapes.push({ x: i * (_W / count) + Math.random() * 20, y: _H * GROUND_H - h, w, h });
-    }
-    return shapes;
+  // ─────────────────────────────────────────────────────────────────────────
+  //  HUD
+  // ─────────────────────────────────────────────────────────────────────────
+  function _updateHUD() {
+    if (_hudDist)  _hudDist.textContent  = Math.floor(_distance)+'M';
+    if (_hudScore) _hudScore.textContent = Math.floor(_score).toLocaleString();
+    if (_hudCoins) _hudCoins.textContent = _coins;
+    if (_comboVal && _combo>1) _comboVal.textContent = 'x'+_combo.toFixed(1);
+    if (_speedFill) _speedFill.style.width = Math.round((_speed/SPEED_MAX)*100)+'%';
   }
 
-  // ─────────────────────────────────────────────
-  //  Asset loading
-  // ─────────────────────────────────────────────
+  function _updateLivesHUD() {
+    const el = document.getElementById('hud-lives');
+    if (el) el.textContent = '❤️'.repeat(Math.max(0,_lives));
+  }
+
+  function _showPopup(msg) {
+    if (!_gamePopup) return;
+    _gamePopup.innerHTML = `<div class="popup-msg">${msg}</div>`;
+    setTimeout(()=>{ if(_gamePopup) _gamePopup.innerHTML=''; }, 1300);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Character sprite
+  // ─────────────────────────────────────────────────────────────────────────
   function _tryLoadCharSprite() {
+    if (!_char?.sprite) { _charImg=null; return; }
     const img = new Image();
-    img.src = `assets/char_${_char.id}.png`;
-    img.onload = () => { _charImg = img; };
-    img.onerror = () => { _charImg = null; };
+    img.onload  = ()=>{ _charImg=img; };
+    img.onerror = ()=>{ _charImg=null; };
+    img.src = _char.sprite;
   }
 
   function _preloadEnvImages() {
-    window.ECHICK_CONFIG.ENVIRONMENTS.forEach(env => {
-      if (!_bgImages[env.id]) {
-        const img = new Image();
-        img.src = `assets/bg_${env.id}.png`;
-        img.onload = () => { _bgImages[env.id] = img; };
-        img.onerror = () => {};
-        _bgImages[env.id] = img;
-      }
-    });
+    const env = window.ECHICK_CONFIG.ENVIRONMENTS[_envIndex];
+    if (!env?.bgImage) return;
+    if (_bgLoaded[env.id]) { _envBgImg=_bgImages[env.id]; return; }
+    const img=new Image();
+    img.onload=()=>{ _bgImages[env.id]=img; _bgLoaded[env.id]=true; _envBgImg=img; };
+    img.src=env.bgImage;
   }
 
-  // ─────────────────────────────────────────────
-  //  Resize
-  // ─────────────────────────────────────────────
-  function _resize() {
-    if (!_cv) return;
-    _W = _cv.width  = window.innerWidth;
-    _H = _cv.height = window.innerHeight;
-    _groundY = _H * GROUND_H;
-    if (_runner) { _runner.x = _W * 0.18; }
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Die / pause / resume / quit
+  // ─────────────────────────────────────────────────────────────────────────
+  function _die() {
+    if (_runner.invincible) return;
+    _lives--;
+    _updateLivesHUD();
+    if (_lives > 0) {
+      _runner.invincible=true; _runner.invincibleTimer=2; _runner.blinkTimer=0;
+      _showPopup('💥');
+      return;
+    }
+    _state='dead';
+    cancelAnimationFrame(_raf);
+    try { Audio2.stopBg(); } catch(e) {}
+    _showGameOver();
+  }
+
+  function _showGameOver() {
+    const modal = document.getElementById('gameover-modal');
+    if (!modal) return;
+    document.getElementById('go-dist')?.innerText && null;
+    const goD=document.getElementById('go-dist');
+    const goS=document.getElementById('go-score');
+    const goC=document.getElementById('go-coins');
+    const goB=document.getElementById('go-best');
+    if (goD) goD.textContent = Math.floor(_distance)+'M';
+    if (goS) goS.textContent = Math.floor(_score).toLocaleString();
+    if (goC) goC.textContent = _coins;
+    if (goB) goB.textContent = ((_player?.best_distance||0)>_distance ? _player.best_distance : Math.floor(_distance))+'M';
+    modal.classList.remove('hidden');
+    // Save score
+    try { DB.saveRun({ score:Math.floor(_score), coins:_coins, distance:Math.floor(_distance) }); } catch(e){}
+  }
+
+  function _hideGameOver() {
+    document.getElementById('gameover-modal')?.classList.add('hidden');
+  }
+
+  function _quit() {
+    _state='idle';
+    cancelAnimationFrame(_raf);
+    try { Audio2.stopBg(); } catch(e) {}
+    _hideGameOver();
+    App.navigateTo('home');
+  }
+
+  function pause() {
+    if (_state!=='running') return;
+    _state='paused';
+    cancelAnimationFrame(_raf);
+    document.getElementById('pause-modal')?.classList.remove('hidden');
+  }
+
+  function resume() {
+    if (_state!=='paused') return;
+    document.getElementById('pause-modal')?.classList.add('hidden');
+    _state='running';
+    _lastTime = performance.now();
+    _raf = requestAnimationFrame(_loop);
   }
 
   return { start, pause, resume };
 })();
 
 window.GameEngine = GameEngine;
+
 
 /* ══════════════════════════════════════════════════
    STORE.JS — Store Screen: Characters · Eggs · Music
